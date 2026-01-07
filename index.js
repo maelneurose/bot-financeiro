@@ -9,7 +9,7 @@ const SUPABASE_URL = 'https://gukvjlhgvgoaqbgiuveq.supabase.co';
 
 // 🚨 NA RAILWAY: Configure isso nas "Variables" com o nome SUPABASE_KEY
 // SE FOR TESTAR NO PC: Cole sua chave service_role dentro das aspas do 'ou'
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1a3ZqbGhndmdvYXFiZ2l1dmVxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NDIwMzk4OSwiZXhwIjoyMDc5Nzc5OTg5fQ.fhzsvj6bWLFADMUvGjHXYV8tvqsisyERQ_TSY7MllhA'; 
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'COLE_SUA_CHAVE_SERVICE_ROLE_AQUI'; 
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -157,12 +157,16 @@ async function processarTransacao(msg, texto, senderNumber) {
 }
 
 // =======================================================
-// 4. O ROBÔ
+// 4. O ROBÔ (COM CORREÇÃO DO QR CODE)
 // =======================================================
 client.on('qr', (qr) => {
+    // 1. Tenta desenhar no terminal (pode sair bugado na Railway)
     qrcode.generate(qr, { small: true });
-    console.log('\n📱 ESCANEIE COM O WHATSAPP SECUNDÁRIO!\n');
-    console.log('⚠️ Se estiver na Railway, veja o QR Code nos LOGS ("View Logs")\n');
+    
+    // 2. GERA UM LINK CLICÁVEL (A SALVAÇÃO!)
+    console.log('\n👇 SE O DESENHO ACIMA ESTIVER RUIM, CLIQUE NO LINK ABAIXO: 👇');
+    console.log(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`);
+    console.log('👆 ABRA ESSE LINK NO NAVEGADOR E ESCANEIE!\n');
 });
 
 client.on('ready', () => {
