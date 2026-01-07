@@ -17,5 +17,5 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 
-# Comando para iniciar
-CMD ["node", "index.js"]c
+# Comando para iniciar (CORRIGIDO)
+CMD node index.js
