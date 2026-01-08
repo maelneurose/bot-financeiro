@@ -11,11 +11,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// ⚙️ CONFIGURAÇÃO FINAL (COM CORREÇÃO DE VERSÃO)
+// ⚙️ CONFIGURAÇÃO MODERNA (PURGE PARIAH)
 const client = new Client({
     authStrategy: new LocalAuth({ 
         dataPath: '/app/.wwebjs_auth',
-        clientId: 'sessao-final' 
+        clientId: 'sessao-ultra-nova' // Mudei para gerar um QR Code fresco
     }),
     puppeteer: {
         headless: true,
@@ -29,13 +29,10 @@ const client = new Client({
             '--no-zygote',
             '--disable-gpu'
         ]
-    },
-    // 👇 ISSO AQUI CONSERTA O QR CODE NA VERSÃO OFICIAL 👇
-    webVersionCache: {
-        type: "remote",
-        remotePath: "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html",
     }
 });
+
+// --- FUNÇÕES DO BOT (Mantive iguais) ---
 
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
