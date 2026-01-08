@@ -12,12 +12,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (CORRIGIDO PARA LER QR CODE) ===
+// === CLIENTE WHATSAPP (COM DISFARCE DE CHROME NORMAL) ===
 const client = new Client({
     authStrategy: new LocalAuth({ 
         dataPath: '/app/.wwebjs_auth',
-        // Mudei o ID para garantir que ele gere um QR Code novo do zero
-        clientId: 'sessao-nova-fix-qr' 
+        clientId: 'sessao-disfarce-v1' // Novo nome para limpar cache antigo
     }),
     puppeteer: {
         headless: true,
@@ -29,17 +28,19 @@ const client = new Client({
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--disable-gpu'
+            '--disable-gpu',
+            // 👇 ESSE É O DISFARCE! Finge que é um Chrome normal no Mac 👇
+            '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
         ]
     },
-    // 👇👇👇 AQUI ESTÁ A MÁGICA QUE CONSERTA O QR CODE 👇👇👇
+    // Correção de versão para aceitar a conexão
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
 });
 
-// === FUNÇÕES DO SISTEMA (MANTIDAS) ===
+// === FUNÇÕES DO SISTEMA ===
 
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
