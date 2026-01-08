@@ -1,7 +1,7 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { createClient } = require('@supabase/supabase-js');
-const schedule = require('node-schedule'); // ⏰ Biblioteca de Agendamento
+const schedule = require('node-schedule'); 
 
 // =======================================================
 // 1. CONFIGURAÇÃO
@@ -14,11 +14,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// ⚙️ CONFIGURAÇÃO TURBINADA PARA RAILWAY (CORREÇÃO DE QR CODE)
+// ⚙️ CONFIGURAÇÃO (SESSÃO LIMPA V2)
 const client = new Client({
     authStrategy: new LocalAuth({ 
         dataPath: '/app/.wwebjs_auth',
-        clientId: 'bot-financeiro' // Mantém a sessão fixa
+        clientId: 'sessao-nova-v2' // 👈 Mudei o nome pra forçar limpeza
     }),
     puppeteer: {
         headless: true,
@@ -27,14 +27,12 @@ const client = new Client({
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas', // 🚀 Deixa mais leve
+            '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--disable-gpu' // 🚀 Evita erros visuais
+            '--disable-gpu'
         ]
-    },
-    authTimeoutMs: 60000, // Espera 60s pelo QR Code (antes era pouco tempo)
-    qrMaxRetries: 10,     // Tenta 10x antes de desistir
+    }
 });
 
 // =======================================================
@@ -79,10 +77,9 @@ async function verificarLimite(profile, msg) {
 // 3. FUNÇÕES: LEMBRETES E RESUMO
 // =======================================================
 
-// ⏰ AGENDAR LEMBRETE
-async function agendarLembrete(msg, texto, profile, senderNumber) {
+async function agendarLembrete(msg, texto, profile) {
     const matchDia = texto.match(/dia\s+(\d+)/);
-    if (!matchDia) return msg.reply('⚠️ Diga o dia. Ex: "Lembre de pagar a luz dia 25"');
+    if (!matchDia) return msg.reply('⚠️ Ex: "Lembre de pagar a luz dia 25"');
 
     const dia = parseInt(matchDia[1]);
     const mensagemLembrete = texto.replace('lembre', '').replace('me lembre', '').replace(/dia\s+\d+/, '').trim();
@@ -92,9 +89,7 @@ async function agendarLembrete(msg, texto, profile, senderNumber) {
     dataLembrete.setDate(dia);
     dataLembrete.setHours(9, 0, 0, 0); 
 
-    if (dataLembrete < hoje) {
-        dataLembrete.setMonth(dataLembrete.getMonth() + 1);
-    }
+    if (dataLembrete < hoje) dataLembrete.setMonth(dataLembrete.getMonth() + 1);
 
     await supabase.from('reminders').insert({
         user_id: profile.id,
@@ -105,13 +100,12 @@ async function agendarLembrete(msg, texto, profile, senderNumber) {
 
     schedule.scheduleJob(dataLembrete, function(){
         const destino = profile.phone.includes('@') ? profile.phone : `${profile.phone}@c.us`;
-        client.sendMessage(destino, `⏰ *LEMBRETE DO DIA!* \n\n📌 ${mensagemLembrete}\n\n_Não esquece hein!_`);
+        client.sendMessage(destino, `⏰ *LEMBRETE!* \n📌 ${mensagemLembrete}`);
     });
 
     msg.reply(`✅ *Agendado!* Vou te lembrar dia ${dia}/${dataLembrete.getMonth() + 1} às 09:00.`);
 }
 
-// 📊 RESUMO DE GASTOS
 async function verResumo(msg, profile) {
     const hoje = new Date();
     const diasAtras = new Date();
@@ -128,12 +122,7 @@ async function verResumo(msg, profile) {
 
     let total = 0;
     let textoResumo = `📊 *Resumo (7 Dias)*\n━━━━━━━━━━━━━━━━\n`;
-    
-    transacoes.forEach(t => {
-        total += t.amount;
-        textoResumo += `💸 ${t.description.substring(0, 15)}.. R$ ${t.amount}\n`;
-    });
-
+    transacoes.forEach(t => { total += t.amount; textoResumo += `💸 ${t.description.substring(0,18)}.. R$ ${t.amount}\n`; });
     textoResumo += `━━━━━━━━━━━━━━━━\n🚨 *Total:* R$ ${total.toFixed(2)}`;
     msg.reply(textoResumo);
 }
@@ -141,7 +130,7 @@ async function verResumo(msg, profile) {
 // =======================================================
 // 4. PROCESSAMENTO FINANCEIRO
 // =======================================================
-async function processarTransacao(msg, texto, senderNumber, profile) {
+async function processarTransacao(msg, texto, profile) {
     if (!(await verificarLimite(profile, msg))) return;
 
     let tipo = 'expense';
@@ -160,23 +149,16 @@ async function processarTransacao(msg, texto, senderNumber, profile) {
             let valor = parseFloat(match[0].replace(',', '.'));
             let desc = itemTexto.replace(match[0], '').trim(); 
             if(desc.length < 2) desc = tipo === 'income' ? 'Entrada' : 'Geral';
-            
             desc = desc.charAt(0).toUpperCase() + desc.slice(1);
             const emoji = escolherEmoji(desc.toLowerCase(), tipo);
 
             await supabase.from('transactions').insert({ user_id: profile.id, amount: valor, type: tipo, description: `${emoji} ${desc}`, date: new Date().toISOString() });
-            
-            total += valor;
-            encontrou = true;
+            total += valor; encontrou = true;
             respostaFinal += `${emoji} *${desc}:* R$ ${valor.toFixed(2)}\n`;
         }
     }
-
     if (!encontrou) return msg.reply('🤖 Não entendi. Tente: "Gastei 10 pizza"');
-
-    if (tipo === 'expense' && profile.salary) {
-        respostaFinal += `━━━━━━━━━━━━━━━━\n⏳ Custo Vida: ${calcularTempoDeVida(total, profile.salary, profile.work_hours)}`;
-    }
+    if (tipo === 'expense' && profile.salary) respostaFinal += `━━━━━━━━━━━━━━━━\n⏳ Custo Vida: ${calcularTempoDeVida(total, profile.salary, profile.work_hours)}`;
     msg.reply(respostaFinal);
 }
 
@@ -188,17 +170,14 @@ async function processarDivida(msg, texto, profile) {
         if (!valorMatch) return msg.reply('❌ Ex: "Devo 50 pro João"');
         const valor = parseFloat(valorMatch[0].replace(',', '.'));
         const pessoa = texto.replace('devo', '').replace(valorMatch[0], '').replace(/(para|pro|pra|ao|a)/g, '').trim();
-
         await supabase.from('debts').insert({ user_id: profile.id, amount: valor, description: pessoa || 'Alguém', type: 'owe', status: 'pending' });
         msg.reply(`📉 *Dívida Anotada!* Você deve R$ ${valor} para ${pessoa}.`);
     }
-
     if (texto.includes('me deve')) {
         const valorMatch = texto.match(/(\d+[.,]?\d*)/);
         if (!valorMatch) return msg.reply('❌ Ex: "João me deve 50"');
         const valor = parseFloat(valorMatch[0].replace(',', '.'));
         const pessoa = texto.split('me deve')[0].trim();
-
         await supabase.from('debts').insert({ user_id: profile.id, amount: valor, description: pessoa, type: 'receive', status: 'pending' });
         msg.reply(`📈 *Cobrança Anotada!* ${pessoa} te deve R$ ${valor}.`);
     }
@@ -209,14 +188,12 @@ async function processarDivida(msg, texto, profile) {
 // =======================================================
 client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
-    // Link "Salva-Vidas" para ver o QR Code se o terminal estiver ruim
+    // Link Mágico para escanear
     console.log(`\n👇 CLIQUE NO LINK ABAIXO PARA VER O QR CODE LIMPO: 👇\nhttps://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
 });
 
 client.on('ready', async () => { 
     console.log('✅ Bot Mael Online!'); 
-    
-    // RECARREGA LEMBRETES DO BANCO AO LIGAR
     const { data: pendentes } = await supabase.from('reminders').select('*').eq('status', 'pending');
     if (pendentes) {
         pendentes.forEach(p => {
@@ -231,82 +208,49 @@ client.on('ready', async () => {
                 });
             }
         });
-        console.log(`⏰ ${pendentes.length} lembretes recarregados.`);
+        console.log(`⏰ Lembretes recarregados: ${pendentes.length}`);
     }
 });
 
 client.on('message_create', async (msg) => {
-    // 🛑 FILTRO DE SEGURANÇA (Anti-Loop)
-    if (msg.fromMe && (msg.body.startsWith('📝') || msg.body.startsWith('🔒') || msg.body.startsWith('📊') || msg.body.startsWith('⏰') || msg.body.startsWith('📉') || msg.body.startsWith('📈'))) return;
+    if (msg.fromMe && (msg.body.startsWith('📝') || msg.body.startsWith('🔒') || msg.body.startsWith('📊') || msg.body.startsWith('⏰'))) return;
     if (msg.from.includes('@g.us')) return;
 
     console.log(`📩 RECEBI: ${msg.body}`);
     const texto = msg.body.toLowerCase().trim();
     const senderNumber = msg.from.replace('@c.us', ''); 
 
-    // Busca Perfil
     const { data: profile } = await supabase.from('profiles').select('id, salary, work_hours, is_pro, phone').eq('phone', senderNumber).single();
-    
-    // Auto-Cadastro (se não existir, não faz nada a não ser que peça ajuda)
     if (!profile && texto !== 'ajuda' && texto !== 'oi') return msg.reply('❌ Cadastre-se no site primeiro!');
 
-    // --- ROTEADOR DE COMANDOS ---
-
-    // 1. Lembretes
-    if (texto.includes('lembre de') || (texto.includes('lembre') && texto.includes('dia'))) {
-        await agendarLembrete(msg, texto, profile, senderNumber);
-        return;
-    }
-
-    // 2. Resumo / Gastos Recentes
-    if (texto.includes('quanto gastei') || texto.includes('resumo') || texto.includes('gastos da semana')) {
-        await verResumo(msg, profile);
-        return;
-    }
-
-    // 3. Dívidas
-    if (texto.startsWith('devo') || texto.includes('me deve')) {
-        await processarDivida(msg, texto, profile);
-        return;
-    }
-
-    if (texto === 'ver dividas' || texto === 'cobranças') {
+    if (texto.includes('lembre')) return await agendarLembrete(msg, texto, profile);
+    if (texto.includes('quanto gastei') || texto.includes('resumo')) return await verResumo(msg, profile);
+    if (texto.startsWith('devo') || texto.includes('me deve')) return await processarDivida(msg, texto, profile);
+    
+    if (texto === 'ver dividas') {
         const { data: debts } = await supabase.from('debts').select('*').eq('user_id', profile.id).eq('status', 'pending');
         if (!debts || !debts.length) return msg.reply('✅ Nada pendente.');
         let txt = `☠️ *Dívidas*\n`;
         debts.forEach(d => txt += d.type === 'owe' ? `🔴 Devo ${d.amount} (${d.description})\n` : `🟢 ${d.description} deve ${d.amount}\n`);
-        msg.reply(txt);
-        return;
-    }
-
-    // 4. Configuração e Ajuda
-    if (texto === 'ajuda' || texto === 'menu' || texto === 'oi') {
-        msg.reply(`🤖 *Mael Financeiro*\n\n🆕 *Use assim:*\n• "Lembre de pagar net dia 25"\n• "Quanto gastei essa semana?"\n• "Gastei 10"\n• "Devo 50 ao João"\n• "Ver dividas"`);
-        return;
+        return msg.reply(txt);
     }
 
     if (texto.startsWith('!config')) {
         const args = texto.split(' ');
         if(args.length < 3) return msg.reply("Use: !config SALARIO HORAS");
         await supabase.from('profiles').update({ salary: parseFloat(args[1]), work_hours: parseFloat(args[2]) }).eq('id', profile.id);
-        msg.reply('✅ Configurado!');
-        return;
+        return msg.reply('✅ Configurado!');
     }
 
     if (texto === 'desfazer') {
-        // Tenta apagar a última coisa registrada (seja transação ou dívida)
         const { data: lastTrans } = await supabase.from('transactions').select('id, description').eq('user_id', profile.id).order('date', { ascending: false }).limit(1).single();
-        if (lastTrans) { 
-            await supabase.from('transactions').delete().eq('id', lastTrans.id); 
-            return msg.reply(`🗑️ Apagado: ${lastTrans.description}`);
-        }
+        if (lastTrans) { await supabase.from('transactions').delete().eq('id', lastTrans.id); return msg.reply(`🗑️ Apagado: ${lastTrans.description}`); }
         return msg.reply('Nada encontrado.');
     }
 
-    // 5. Transações Normais (Gastei / Ganhei)
-    if (texto.match(/^(gastei|comprei|paguei|recebi|ganhei|caiu|salario)/) || texto.match(/^\d+/)) {
-        await processarTransacao(msg, texto, senderNumber, profile);
-    }
+    if (texto === 'ajuda' || texto === 'menu' || texto === 'oi') return msg.reply(`🤖 *Manual*\n• Lembre de pagar luz dia 20\n• Gastei 10\n• Devo 50\n• Ver dividas`);
+
+    if (texto.match(/^(gastei|comprei|paguei|recebi|ganhei|caiu|salario)/) || texto.match(/^\d+/)) await processarTransacao(msg, texto, profile);
 });
 
 client.initialize();
