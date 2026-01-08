@@ -1,4 +1,3 @@
-// 👇 Importamos o 'NoAuth' para garantir que não tenha lixo de sessão antiga
 const { Client, LocalAuth, NoAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { createClient } = require('@supabase/supabase-js');
@@ -13,15 +12,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (MODO CAMUFLAGEM) ===
+// === CLIENTE WHATSAPP (MODO CAMUFLAGEM + CHROME NOVO) ===
 const client = new Client({
-    // 1. Mudei para NoAuth. Isso zera a memória e evita o erro "Não foi possível conectar"
+    // Usamos NoAuth para garantir que a conexão seja limpa e sem erros de sessão velha
     authStrategy: new NoAuth(), 
     
     puppeteer: {
-        // 2. Headless 'new' é mais difícil de ser detectado
-        headless: 'new', 
-        executablePath: '/usr/bin/chromium',
+        headless: 'new', // Modo novo do Chrome (mais difícil de detectar)
+        executablePath: '/usr/bin/chromium', // Caminho padrão no Bookworm
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -30,11 +28,11 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            // 3. Disfarce de Windows 11 (Mais aceito que Mac)
+            // Disfarce de Windows 10/11 (O mais aceito pelo WhatsApp)
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // Mantém a correção para o QR Code aparecer
+    // Força uma versão do Zap Web compatível
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
