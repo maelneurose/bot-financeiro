@@ -1,7 +1,8 @@
 FROM node:18-bullseye-slim
 
-# Instala dependências do Chrome para o Puppeteer rodar
+# Instala dependências do Chrome E O GIT (Essencial para baixar do GitHub)
 RUN apt-get update && apt-get install -y \
+    git \
     chromium \
     libnss3 \
     libxss1 \
@@ -17,5 +18,5 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 
-# Comando para iniciar (CORRIGIDO)
+# Comando para iniciar
 CMD node index.js
