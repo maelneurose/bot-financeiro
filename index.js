@@ -12,11 +12,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (PURGE PARIAH - QR CODE FIX) ===
+// === CLIENTE WHATSAPP (OFICIAL + PATCH DE CORREÇÃO) ===
 const client = new Client({
     authStrategy: new LocalAuth({ 
         dataPath: '/app/.wwebjs_auth',
-        clientId: 'sessao-final-v3' // Mudamos o nome para limpar caches antigos
+        clientId: 'sessao-oficial-fix' 
     }),
     puppeteer: {
         headless: true,
@@ -30,10 +30,15 @@ const client = new Client({
             '--no-zygote',
             '--disable-gpu'
         ]
+    },
+    // 👇 O SEGREDO: ISSO CONSERTA O QR CODE NA VERSÃO OFICIAL 👇
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
 });
 
-// === FUNÇÕES DO SISTEMA ===
+// === FUNÇÕES DO SISTEMA (COMPLETAS) ===
 
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
@@ -59,7 +64,6 @@ async function verificarLimite(profile, msg) {
     return true; 
 }
 
-// 1. LEMBRETES
 async function agendarLembrete(msg, texto, profile) {
     const matchDia = texto.match(/dia\s+(\d+)/);
     if (!matchDia) return msg.reply('⚠️ Ex: "Lembre de pagar a luz dia 25"');
@@ -76,7 +80,6 @@ async function agendarLembrete(msg, texto, profile) {
     msg.reply(`✅ *Agendado!* Dia ${dia} às 09:00.`);
 }
 
-// 2. RESUMO
 async function verResumo(msg, profile) {
     const dias = new Date(); dias.setDate(new Date().getDate() - 7); 
     const { data: trans } = await supabase.from('transactions').select('*').eq('user_id', profile.id).eq('type', 'expense').gte('date', dias.toISOString());
@@ -86,7 +89,6 @@ async function verResumo(msg, profile) {
     msg.reply(txt + `🚨 *Total:* R$ ${total.toFixed(2)}`);
 }
 
-// 3. TRANSAÇÕES
 async function processarTransacao(msg, texto, profile) {
     if (!(await verificarLimite(profile, msg))) return;
     let tipo = texto.match(/^(recebi|ganhei|caiu|salario)/) ? 'income' : 'expense';
@@ -108,7 +110,6 @@ async function processarTransacao(msg, texto, profile) {
     msg.reply(txt);
 }
 
-// 4. DÍVIDAS
 async function processarDivida(msg, texto, profile) {
     if (!(await verificarLimite(profile, msg))) return;
     if (texto.startsWith('devo')) {
@@ -140,9 +141,7 @@ client.on('message_create', async (msg) => {
     if (msg.fromMe || msg.from.includes('@g.us')) return;
     const texto = msg.body.toLowerCase().trim();
     const { data: profile } = await supabase.from('profiles').select('*').eq('phone', msg.from.replace('@c.us', '')).single();
-    
     if (!profile && !['ajuda', 'oi'].includes(texto)) return msg.reply('❌ Cadastre-se no site!');
-    if (!profile && ['ajuda', 'oi'].includes(texto)) return msg.reply('🚀 Acesse o site para criar conta!');
 
     if (texto.includes('lembre')) return await agendarLembrete(msg, texto, profile);
     if (texto.includes('quanto gastei') || texto.includes('resumo')) return await verResumo(msg, profile);
