@@ -1,6 +1,6 @@
 FROM node:18-bullseye-slim
 
-# 1. Instala o Git (ESSENCIAL para o link funcionar) e o Chrome
+# 1. Instala Git e Chrome (Essencial para não dar erro 128)
 RUN apt-get update && apt-get install -y \
     git \
     chromium \
