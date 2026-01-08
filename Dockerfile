@@ -1,6 +1,6 @@
 FROM node:18-bullseye-slim
 
-# Instala dependências do Chrome E O GIT (Essencial para baixar do GitHub)
+# 1. Instala o Git (Obrigatório para baixar o WhatsApp novo) e o Chrome
 RUN apt-get update && apt-get install -y \
     git \
     chromium \
@@ -12,11 +12,17 @@ RUN apt-get update && apt-get install -y \
     libgbm-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Configurações do Node
+# 2. Configura a pasta do bot
 WORKDIR /app
+
+# 3. Copia os arquivos de configuração
 COPY package*.json ./
+
+# 4. Instala os pacotes (Agora vai funcionar porque o Git está instalado!)
 RUN npm install
+
+# 5. Copia o resto do código
 COPY . .
 
-# Comando para iniciar
-CMD node index.js
+# 6. Liga o bot
+CMD ["node", "index.js"]
