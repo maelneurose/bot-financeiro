@@ -1,8 +1,8 @@
 FROM node:18-bullseye-slim
 
-# 1. Instala Git e Chrome (Essencial para não dar erro 128)
+# Instala dependências do Chrome e ferramentas de sistema
 RUN apt-get update && apt-get install -y \
-    git \
+    wget \
     chromium \
     libnss3 \
     libxss1 \
@@ -12,13 +12,13 @@ RUN apt-get update && apt-get install -y \
     libgbm-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Configura a pasta
+# Configura a pasta
 WORKDIR /app
 
-# 3. Copia e instala
+# Copia e instala
 COPY package*.json ./
 RUN npm install
 
-# 4. Copia o resto e liga
+# Copia o resto e liga
 COPY . .
 CMD ["node", "index.js"]
