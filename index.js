@@ -12,9 +12,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (MODERNO) ===
+// === CLIENTE WHATSAPP ===
 const client = new Client({
-    // NoAuth: Garante conexão limpa sem "lixo" de sessões antigas
+    // NoAuth = Conexão limpa, sem memórias ruins
     authStrategy: new NoAuth(),
     
     puppeteer: {
@@ -28,13 +28,13 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            // User Agent de Windows 10 para enganar o WhatsApp
+            // Disfarce de Windows 10
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     }
 });
 
-// === FUNÇÕES (MANTIDAS IGUAIS) ===
+// === FUNÇÕES ===
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
     if (texto.includes('cerveja') || texto.includes('chopp') || texto.includes('bar')) return '🍺';
