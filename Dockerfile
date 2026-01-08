@@ -1,7 +1,7 @@
-# Usa sistema moderno (Bookworm) para ter Chrome atualizado
+# Usa o sistema moderno (Bookworm) para o Chrome funcionar no celular novo
 FROM node:20-bookworm-slim
 
-# Instala Git (Obrigatório) e Chrome
+# Instala Git e Chromium
 RUN apt-get update && apt-get install -y \
     git \
     chromium \
@@ -13,7 +13,12 @@ RUN apt-get update && apt-get install -y \
     libgbm-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Configurações padrão
+# 👇 A SOLUÇÃO DO ERRO 128 👇
+# Isso obriga o servidor a usar HTTPS (público) e ignorar SSH (que pede senha)
+RUN git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+RUN git config --global url."https://".insteadOf git://
+
+# Configuração padrão
 WORKDIR /app
 COPY package*.json ./
 RUN npm install

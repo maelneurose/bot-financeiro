@@ -12,13 +12,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (MODERNO AUTOMÁTICO) ===
+// === CLIENTE WHATSAPP (MODERNO) ===
 const client = new Client({
-    // NoAuth: Começa limpo, sem memória de sessões falhas antigas
+    // NoAuth: Garante conexão limpa sem "lixo" de sessões antigas
     authStrategy: new NoAuth(),
     
     puppeteer: {
-        headless: 'new', // Modo novo, mais furtivo
+        headless: 'new',
         executablePath: '/usr/bin/chromium',
         args: [
             '--no-sandbox',
@@ -28,15 +28,13 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            // Disfarce de Windows 11 (O mais compatível hoje)
+            // User Agent de Windows 10 para enganar o WhatsApp
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     }
-    // REMOVIDO: webVersionCache (Deixamos automático para pegar a versão 2026)
 });
 
-// === FUNÇÕES DO SISTEMA ===
-
+// === FUNÇÕES (MANTIDAS IGUAIS) ===
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
     if (texto.includes('cerveja') || texto.includes('chopp') || texto.includes('bar')) return '🍺';
@@ -126,7 +124,6 @@ async function processarDivida(msg, texto, profile) {
     }
 }
 
-// === START ===
 client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
     console.log(`\n👇 QR CODE: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
