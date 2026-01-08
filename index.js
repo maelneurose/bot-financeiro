@@ -12,11 +12,12 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (OFICIAL + PATCH DE CORREÇÃO) ===
+// === CLIENTE WHATSAPP (CORRIGIDO PARA LER QR CODE) ===
 const client = new Client({
     authStrategy: new LocalAuth({ 
         dataPath: '/app/.wwebjs_auth',
-        clientId: 'sessao-oficial-fix' 
+        // Mudei o ID para garantir que ele gere um QR Code novo do zero
+        clientId: 'sessao-nova-fix-qr' 
     }),
     puppeteer: {
         headless: true,
@@ -31,14 +32,14 @@ const client = new Client({
             '--disable-gpu'
         ]
     },
-    // 👇 O SEGREDO: ISSO CONSERTA O QR CODE NA VERSÃO OFICIAL 👇
+    // 👇👇👇 AQUI ESTÁ A MÁGICA QUE CONSERTA O QR CODE 👇👇👇
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
 });
 
-// === FUNÇÕES DO SISTEMA (COMPLETAS) ===
+// === FUNÇÕES DO SISTEMA (MANTIDAS) ===
 
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
