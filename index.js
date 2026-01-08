@@ -14,11 +14,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// ⚙️ CONFIGURAÇÃO (SESSÃO LIMPA V2)
+// ⚙️ CONFIGURAÇÃO BLINDADA (FORÇANDO VERSÃO COMPATÍVEL)
 const client = new Client({
     authStrategy: new LocalAuth({ 
         dataPath: '/app/.wwebjs_auth',
-        clientId: 'sessao-nova-v2' // 👈 Mudei o nome pra forçar limpeza
+        clientId: 'sessao-final-v3' // Mudei o nome para garantir limpeza total
     }),
     puppeteer: {
         headless: true,
@@ -32,7 +32,12 @@ const client = new Client({
             '--no-zygote',
             '--disable-gpu'
         ]
-    }
+    },
+    // 👇 ISSO AQUI É O SEGREDO PARA O QR CODE FUNCIONAR 👇
+    webVersionCache: {
+        type: "remote",
+        remotePath: "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html",
+    },
 });
 
 // =======================================================
