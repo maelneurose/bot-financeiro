@@ -1,7 +1,7 @@
 # Sistema moderno (Bookworm) para garantir Chrome novo
 FROM node:20-bookworm-slim
 
-# Instala apenas o Chromium necessário
+# Instala apenas o Chromium
 RUN apt-get update && apt-get install -y \
     chromium \
     libnss3 \

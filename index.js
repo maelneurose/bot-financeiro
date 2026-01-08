@@ -12,9 +12,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (CORREÇÃO MANUAL) ===
+// === CLIENTE WHATSAPP (OFICIAL + PATCH MANUAL) ===
 const client = new Client({
-    // Usar NoAuth é vital agora para limpar erros de conexão anteriores
+    // Usa NoAuth para garantir que não tenha sessão velha atrapalhando
     authStrategy: new NoAuth(),
     
     puppeteer: {
@@ -28,18 +28,18 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            // Este User-Agent é o segredo para o celular aceitar
+            // User-Agent de Mac (Geralmente aceito sem problemas)
             '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 ISSO AQUI FORÇA O ZAP A FUNCIONAR NA VERSÃO ANTIGA DA BIBLIOTECA 👇
+    // 👇 O PULO DO GATO: Força a biblioteca antiga a usar o Zap Novo 👇
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
 });
 
-// === FUNÇÕES ===
+// === FUNÇÕES DO SISTEMA ===
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
     if (texto.includes('cerveja') || texto.includes('chopp') || texto.includes('bar')) return '🍺';
