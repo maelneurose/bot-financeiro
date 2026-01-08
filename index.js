@@ -12,14 +12,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (MODO CAMUFLAGEM + CHROME NOVO) ===
+// === CLIENTE WHATSAPP (MODERNO AUTOMÁTICO) ===
 const client = new Client({
-    // Usamos NoAuth para garantir que a conexão seja limpa e sem erros de sessão velha
-    authStrategy: new NoAuth(), 
+    // NoAuth: Começa limpo, sem memória de sessões falhas antigas
+    authStrategy: new NoAuth(),
     
     puppeteer: {
-        headless: 'new', // Modo novo do Chrome (mais difícil de detectar)
-        executablePath: '/usr/bin/chromium', // Caminho padrão no Bookworm
+        headless: 'new', // Modo novo, mais furtivo
+        executablePath: '/usr/bin/chromium',
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -28,15 +28,11 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            // Disfarce de Windows 10/11 (O mais aceito pelo WhatsApp)
+            // Disfarce de Windows 11 (O mais compatível hoje)
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
-    },
-    // Força uma versão do Zap Web compatível
-    webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
+    // REMOVIDO: webVersionCache (Deixamos automático para pegar a versão 2026)
 });
 
 // === FUNÇÕES DO SISTEMA ===

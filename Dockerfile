@@ -1,8 +1,9 @@
-# Mudei para 'bookworm' (versão mais nova do Linux) para ter o Chrome Atualizado
+# Usa sistema moderno (Bookworm) para ter Chrome atualizado
 FROM node:20-bookworm-slim
 
-# Instala o Chromium Moderno e dependências
+# Instala Git (Obrigatório) e Chrome
 RUN apt-get update && apt-get install -y \
+    git \
     chromium \
     libnss3 \
     libxss1 \
@@ -12,13 +13,9 @@ RUN apt-get update && apt-get install -y \
     libgbm-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Configura a pasta
+# Configurações padrão
 WORKDIR /app
-
-# Copia e instala
 COPY package*.json ./
 RUN npm install
-
-# Copia o resto e liga
 COPY . .
 CMD ["node", "index.js"]
