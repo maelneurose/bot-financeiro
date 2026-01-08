@@ -1,4 +1,5 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+// 👇 Importamos o 'NoAuth' para garantir que não tenha lixo de sessão antiga
+const { Client, LocalAuth, NoAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { createClient } = require('@supabase/supabase-js');
 const schedule = require('node-schedule'); 
@@ -12,14 +13,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (COM DISFARCE DE CHROME NORMAL) ===
+// === CLIENTE WHATSAPP (MODO CAMUFLAGEM) ===
 const client = new Client({
-    authStrategy: new LocalAuth({ 
-        dataPath: '/app/.wwebjs_auth',
-        clientId: 'sessao-disfarce-v1' // Novo nome para limpar cache antigo
-    }),
+    // 1. Mudei para NoAuth. Isso zera a memória e evita o erro "Não foi possível conectar"
+    authStrategy: new NoAuth(), 
+    
     puppeteer: {
-        headless: true,
+        // 2. Headless 'new' é mais difícil de ser detectado
+        headless: 'new', 
         executablePath: '/usr/bin/chromium',
         args: [
             '--no-sandbox',
@@ -29,11 +30,11 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            // 👇 ESSE É O DISFARCE! Finge que é um Chrome normal no Mac 👇
-            '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
+            // 3. Disfarce de Windows 11 (Mais aceito que Mac)
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // Correção de versão para aceitar a conexão
+    // Mantém a correção para o QR Code aparecer
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
