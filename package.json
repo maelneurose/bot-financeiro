@@ -10,7 +10,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js", 
+    "whatsapp-web.js": "github:purge-pariah/whatsapp-web.js",
     "node-schedule": "^2.1.1"
   }
 }
