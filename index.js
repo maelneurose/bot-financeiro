@@ -14,13 +14,27 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
+// ⚙️ CONFIGURAÇÃO TURBINADA PARA RAILWAY (CORREÇÃO DE QR CODE)
 const client = new Client({
-    authStrategy: new LocalAuth({ dataPath: '/app/.wwebjs_auth' }),
+    authStrategy: new LocalAuth({ 
+        dataPath: '/app/.wwebjs_auth',
+        clientId: 'bot-financeiro' // Mantém a sessão fixa
+    }),
     puppeteer: {
         headless: true,
         executablePath: '/usr/bin/chromium',
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    }
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas', // 🚀 Deixa mais leve
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu' // 🚀 Evita erros visuais
+        ]
+    },
+    authTimeoutMs: 60000, // Espera 60s pelo QR Code (antes era pouco tempo)
+    qrMaxRetries: 10,     // Tenta 10x antes de desistir
 });
 
 // =======================================================
@@ -32,7 +46,7 @@ function escolherEmoji(texto, tipo) {
     if (texto.includes('cerveja') || texto.includes('chopp') || texto.includes('bar')) return '🍺';
     if (texto.includes('maconha') || texto.includes('erva') || texto.includes('chá')) return '🌿';
     if (texto.includes('cigarro') || texto.includes('vape')) return '🚬';
-    if (texto.includes('ifood') || texto.includes('pizza') || texto.includes('lanche')) return '🍔';
+    if (texto.includes('ifood') || texto.includes('pizza') || texto.includes('lanche') || texto.includes('burguer')) return '🍔';
     if (texto.includes('uber') || texto.includes('gasolina')) return '🚖';
     return '💸'; 
 }
@@ -62,12 +76,11 @@ async function verificarLimite(profile, msg) {
 }
 
 // =======================================================
-// 3. NOVAS FUNÇÕES: LEMBRETES E RESUMO
+// 3. FUNÇÕES: LEMBRETES E RESUMO
 // =======================================================
 
 // ⏰ AGENDAR LEMBRETE
 async function agendarLembrete(msg, texto, profile, senderNumber) {
-    // Tenta achar "Dia X"
     const matchDia = texto.match(/dia\s+(\d+)/);
     if (!matchDia) return msg.reply('⚠️ Diga o dia. Ex: "Lembre de pagar a luz dia 25"');
 
@@ -77,24 +90,20 @@ async function agendarLembrete(msg, texto, profile, senderNumber) {
     const hoje = new Date();
     let dataLembrete = new Date();
     dataLembrete.setDate(dia);
-    dataLembrete.setHours(9, 0, 0, 0); // 09:00 da manhã
+    dataLembrete.setHours(9, 0, 0, 0); 
 
-    // Se o dia já passou, agenda pro mês que vem
     if (dataLembrete < hoje) {
         dataLembrete.setMonth(dataLembrete.getMonth() + 1);
     }
 
-    // Salva no Banco
-    const { data: reminder } = await supabase.from('reminders').insert({
+    await supabase.from('reminders').insert({
         user_id: profile.id,
         message: mensagemLembrete,
         remind_at: dataLembrete.toISOString(),
         status: 'pending'
-    }).select().single();
+    });
 
-    // Agenda no Sistema
     schedule.scheduleJob(dataLembrete, function(){
-        // Envia mensagem ativa (precisa do formato user@c.us)
         const destino = profile.phone.includes('@') ? profile.phone : `${profile.phone}@c.us`;
         client.sendMessage(destino, `⏰ *LEMBRETE DO DIA!* \n\n📌 ${mensagemLembrete}\n\n_Não esquece hein!_`);
     });
@@ -106,7 +115,7 @@ async function agendarLembrete(msg, texto, profile, senderNumber) {
 async function verResumo(msg, profile) {
     const hoje = new Date();
     const diasAtras = new Date();
-    diasAtras.setDate(hoje.getDate() - 7); // Últimos 7 dias
+    diasAtras.setDate(hoje.getDate() - 7); 
 
     const { data: transacoes } = await supabase
         .from('transactions')
@@ -122,7 +131,7 @@ async function verResumo(msg, profile) {
     
     transacoes.forEach(t => {
         total += t.amount;
-        textoResumo += `💸 ${t.description}.. R$ ${t.amount}\n`;
+        textoResumo += `💸 ${t.description.substring(0, 15)}.. R$ ${t.amount}\n`;
     });
 
     textoResumo += `━━━━━━━━━━━━━━━━\n🚨 *Total:* R$ ${total.toFixed(2)}`;
@@ -200,7 +209,8 @@ async function processarDivida(msg, texto, profile) {
 // =======================================================
 client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
-    console.log(`\n🔗 Link Mágico: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
+    // Link "Salva-Vidas" para ver o QR Code se o terminal estiver ruim
+    console.log(`\n👇 CLIQUE NO LINK ABAIXO PARA VER O QR CODE LIMPO: 👇\nhttps://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
 });
 
 client.on('ready', async () => { 
@@ -213,7 +223,6 @@ client.on('ready', async () => {
             const dataLembrete = new Date(p.remind_at);
             if (dataLembrete > new Date()) {
                 schedule.scheduleJob(dataLembrete, async function(){
-                    // Tenta achar o usuário para enviar
                     const {data: user} = await supabase.from('profiles').select('phone').eq('id', p.user_id).single();
                     if(user) {
                         const destino = user.phone.includes('@') ? user.phone : `${user.phone}@c.us`;
