@@ -12,11 +12,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (MODERNO) ===
+// === CLIENTE WHATSAPP (PURGE PARIAH - QR CODE FIX) ===
 const client = new Client({
     authStrategy: new LocalAuth({ 
         dataPath: '/app/.wwebjs_auth',
-        clientId: 'sessao-completa-v2' 
+        clientId: 'sessao-final-v3' // Mudamos o nome para limpar caches antigos
     }),
     puppeteer: {
         headless: true,
@@ -112,12 +112,16 @@ async function processarTransacao(msg, texto, profile) {
 async function processarDivida(msg, texto, profile) {
     if (!(await verificarLimite(profile, msg))) return;
     if (texto.startsWith('devo')) {
-        const valor = parseFloat(texto.match(/\d+/)[0]);
+        const valorMatch = texto.match(/(\d+[.,]?\d*)/);
+        if(!valorMatch) return;
+        const valor = parseFloat(valorMatch[0].replace(',', '.'));
         const quem = texto.replace(/devo|\d+|para|pro|pra/g, '').trim();
         await supabase.from('debts').insert({ user_id: profile.id, amount: valor, description: quem, type: 'owe', status: 'pending' });
         msg.reply(`📉 Devo ${valor} para ${quem}.`);
     } else if (texto.includes('me deve')) {
-        const valor = parseFloat(texto.match(/\d+/)[0]);
+        const valorMatch = texto.match(/(\d+[.,]?\d*)/);
+        if(!valorMatch) return;
+        const valor = parseFloat(valorMatch[0].replace(',', '.'));
         const quem = texto.split('me deve')[0].trim();
         await supabase.from('debts').insert({ user_id: profile.id, amount: valor, description: quem, type: 'receive', status: 'pending' });
         msg.reply(`📈 ${quem} te deve ${valor}.`);
