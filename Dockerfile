@@ -1,8 +1,7 @@
 FROM node:18-bullseye-slim
 
-# Instala dependências do Chrome e ferramentas de sistema
 RUN apt-get update && apt-get install -y \
-    wget \
+    git \
     chromium \
     libnss3 \
     libxss1 \
@@ -12,13 +11,8 @@ RUN apt-get update && apt-get install -y \
     libgbm-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Configura a pasta
 WORKDIR /app
-
-# Copia e instala
 COPY package*.json ./
 RUN npm install
-
-# Copia o resto e liga
 COPY . .
 CMD ["node", "index.js"]
