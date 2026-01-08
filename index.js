@@ -12,13 +12,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (OFICIAL + PATCH MANUAL) ===
+// === CLIENTE WHATSAPP (VERSÃO DE OURO 2.2407.3) ===
 const client = new Client({
-    // Usa NoAuth para garantir que não tenha sessão velha atrapalhando
+    // NoAuth: Garante que começamos do zero, sem lixo de sessões falhas
     authStrategy: new NoAuth(),
     
     puppeteer: {
-        headless: 'new',
+        headless: 'new', // Modo novo e furtivo
         executablePath: '/usr/bin/chromium',
         args: [
             '--no-sandbox',
@@ -28,18 +28,19 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            // User-Agent de Mac (Geralmente aceito sem problemas)
-            '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            // User-Agent genérico de Windows 10 (Funciona melhor que Mac)
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 O PULO DO GATO: Força a biblioteca antiga a usar o Zap Novo 👇
+    // 👇 A MUDANÇA: Usando a versão 2.2407.3 que é mais estável para conectar 👇
     webVersionCache: {
         type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2407.3.html',
     }
 });
 
-// === FUNÇÕES DO SISTEMA ===
+// === FUNÇÕES ===
+
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
     if (texto.includes('cerveja') || texto.includes('chopp') || texto.includes('bar')) return '🍺';
