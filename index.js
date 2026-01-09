@@ -14,10 +14,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 // === CLIENTE WHATSAPP ===
 const client = new Client({
-    // NoAuth: Obrigatório para limpar a tentativa falha anterior
+    // NoAuth: Limpeza total
     authStrategy: new NoAuth(),
 
-    // Paciência infinita (0) para não dar timeout
     authTimeoutMs: 0,
     qrMaxRetries: 10,
     
@@ -33,14 +32,19 @@ const client = new Client({
             '--no-zygote',
             '--single-process', 
             '--disable-gpu',
-            // 👇 NOVOS COMANDOS ANTI-QUEDA 👇
-            '--disable-web-security', 
+            
+            // 👇 LISTA DE COMANDOS PARA "QUEBRAR" A SEGURANÇA E FORÇAR CONEXÃO 👇
+            '--disable-web-security',
             '--disable-features=IsolateOrigins,site-per-process',
-            // Disfarce Windows (O ÚNICO QUE FUNCIONOU)
+            '--allow-running-insecure-content',
+            '--disable-blink-features=AutomationControlled',
+            '--ignore-certificate-errors',
+            
+            // Disfarce Perfeito
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 A VERSÃO QUE O SEU CELULAR ACEITOU ANTES 👇
+    // 👇 A VERSÃO "MÁGICA" (Que vibrou antes) 👇
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
@@ -66,7 +70,7 @@ async function processarDivida(msg, texto, profile) { if (!(await verificarLimit
 client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
     // Link manual (Plano B)
-    console.log(`\nLINK QR: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
+    console.log(`\n👇 TENTE ESTE LINK SE O TERMINAL FALHAR 👇\nhttps://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
 });
 
 client.on('ready', () => console.log('✅ Bot Online!'));
@@ -74,10 +78,12 @@ client.on('ready', () => console.log('✅ Bot Online!'));
 client.on('message_create', async (msg) => {
     if (msg.from.includes('@g.us')) return;
     if (msg.fromMe && (msg.body.startsWith('📝') || msg.body.startsWith('🤖'))) return; 
+    
     const texto = msg.body.toLowerCase().trim();
     const { data: profile } = await supabase.from('profiles').select('*').eq('phone', msg.from.replace('@c.us', '')).single();
     if (!profile && !['ajuda', 'oi'].includes(texto)) return msg.reply('❌ Cadastre-se no site!');
     
+    // ... Comandos
     if (texto.includes('lembre')) return await agendarLembrete(msg, texto, profile);
     if (texto.includes('resumo') || texto.includes('gastei')) return await verResumo(msg, profile);
     if (texto.startsWith('devo') || texto.includes('me deve')) return await processarDivida(msg, texto, profile);

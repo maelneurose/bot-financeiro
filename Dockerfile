@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 COPY package*.json ./
-# Instalação limpa e rápida
-RUN npm install
+# Flag --unsafe-perm ajuda a evitar erros de permissão na Railway
+RUN npm install --unsafe-perm
 COPY . .
 CMD ["node", "index.js"]
