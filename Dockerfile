@@ -1,18 +1,17 @@
 FROM node:20-bookworm-slim
 
+# Instala apenas o básico do básico
 RUN apt-get update && apt-get install -y \
-    chromium \
-    libnss3 \
-    libxss1 \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libgtk-3-0 \
-    libgbm-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
 COPY package*.json ./
-# Flag --unsafe-perm ajuda a evitar erros de permissão na Railway
-RUN npm install --unsafe-perm
+
+# Instala as dependências
+RUN npm install
+
 COPY . .
+
 CMD ["node", "index.js"]
