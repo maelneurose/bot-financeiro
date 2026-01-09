@@ -12,11 +12,12 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (VERSÃO QUE VIBRA + CHAT LIBERADO) ===
+// === CLIENTE WHATSAPP (A VERSÃO CERTA) ===
 const client = new Client({
-    // Usamos NoAuth para limpar qualquer erro de sessão anterior
+    // NoAuth: Começa limpo, sem vícios de sessões que deram errado
     authStrategy: new NoAuth(),
     
+    // Aumenta o tempo para o celular não desconectar enquanto carrega
     authTimeoutMs: 120000, 
     qrMaxRetries: 10,
     
@@ -32,18 +33,18 @@ const client = new Client({
             '--no-zygote',
             '--disable-gpu',
             '--disable-features=IsolateOrigins,site-per-process', 
-            // Disfarce de Windows (Fundamental para o QR ler)
+            // Disfarce de Windows (Obrigatório para o QR ler)
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 VOLTEI PARA A VERSÃO QUE O SEU CELULAR ACEITOU ANTES 👇
+    // 👇 ESSA É A VERSÃO QUE FEZ SEU CELULAR VIBRAR. É ELA QUE VAMOS USAR. 👇
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
 });
 
-// === FUNÇÕES DO SISTEMA ===
+// === FUNÇÕES ===
 
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
@@ -142,21 +143,16 @@ client.on('qr', (qr) => {
 client.on('ready', () => console.log('✅ Bot Online!'));
 
 client.on('message_create', async (msg) => {
-    // 1. Ignora Grupos
+    // 1. Ignora grupos
     if (msg.from.includes('@g.us')) return;
 
-    // 2. CHAT LIBERADO PARA VOCÊ: Só ignora se for a própria resposta do bot (emojis)
-    if (msg.fromMe) {
-        if (msg.body.startsWith('📝') || msg.body.startsWith('📊') || msg.body.startsWith('🤖') || 
-            msg.body.startsWith('✅') || msg.body.startsWith('🔒') || msg.body.startsWith('⚠️') || 
-            msg.body.startsWith('📉') || msg.body.startsWith('📈') || msg.body.startsWith('💸') || msg.body.startsWith('🤑')) {
-            return;
-        }
-    }
+    // 2. Lógica para Números Diferentes (Mael Novo -> Mael Pessoal)
+    // Se a mensagem não é minha (msg.fromMe == false), significa que é você (pessoal) mandando.
+    // O código abaixo JÁ ESTÁ PRONTO para isso.
 
     const texto = msg.body.toLowerCase().trim();
     const { data: profile } = await supabase.from('profiles').select('*').eq('phone', msg.from.replace('@c.us', '')).single();
-    if (!profile && !['ajuda', 'oi'].includes(texto)) return msg.reply('❌ Cadastre-se no site!');
+    if (!profile && !['ajuda', 'oi', '!ajuda'].includes(texto)) return msg.reply('❌ Cadastre-se no site!');
 
     if (texto.includes('lembre')) return await agendarLembrete(msg, texto, profile);
     if (texto === 'resumo' || texto === 'ver resumo' || texto.includes('quanto gastei')) return await verResumo(msg, profile);
