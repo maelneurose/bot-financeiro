@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, NoAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { createClient } = require('@supabase/supabase-js');
 const schedule = require('node-schedule'); 
@@ -12,40 +12,33 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (MODO TURBO + PACIÊNCIA) ===
+// === CLIENTE WHATSAPP (MODO PERFORMANCE) ===
 const client = new Client({
-    // 1. Mudei o nome para limpar a sujeira da tentativa anterior
-    authStrategy: new LocalAuth({ 
-        clientId: 'sessao-turbo-final',
-        dataPath: '/app/.wwebjs_auth'
-    }),
+    // Usamos NoAuth para garantir que a conexão seja "fresca" e rápida
+    authStrategy: new NoAuth(),
 
-    // 2. ISSO É VITAL: Diz pro bot esperar o tempo que for preciso para baixar suas conversas
-    authTimeoutMs: 0, 
+    // Configurações para não deixar o celular desconectar por demora
+    qrMaxRetries: 10,
+    authTimeoutMs: 60000, // Espera até 60s para conectar (dá tempo do celular pensar)
     
-    // 3. Se der conflito, ele força a entrada
-    takeoverOnConflict: true,
-
     puppeteer: {
         headless: 'new',
         executablePath: '/usr/bin/chromium',
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
+            // 👇 ISSO SALVA A CONEXÃO NA RAILWAY 👇
+            '--disable-dev-shm-usage', // Evita erro de memória cheia
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
+            '--single-process', // Reduz consumo de RAM
             '--disable-gpu',
-            // Disfarce de Windows 10
+            // Disfarce simples e leve
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
-    },
-    // Mantendo a versão que funcionou (2.2412.54)
-    webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
+    // ⚠️ REMOVI O 'webVersionCache'. Deixar automático evita conflito com seu celular novo.
 });
 
 // === FUNÇÕES ===
