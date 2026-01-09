@@ -1,4 +1,4 @@
-const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const { createClient } = require('@supabase/supabase-js');
 const schedule = require('node-schedule');
@@ -32,14 +32,19 @@ async function processarDivida(sock, jid, texto, profile) { if (!(await verifica
 
 // === CONEXÃO BAILEYS ===
 async function connectToWhatsApp() {
-    // ⚠️ Mudei o nome da pasta para 'auth_baileys_nova_tentativa' para limpar o erro anterior
-    const { state, saveCreds } = await useMultiFileAuthState('auth_baileys_nova_tentativa');
+    // ⚠️ Nome de pasta novo para garantir limpeza
+    const { state, saveCreds } = await useMultiFileAuthState('auth_baileys_final');
     
     const sock = makeWASocket({
-        auth: state,
-        // ⚠️ REMOVIDO: printQRInTerminal: true (Isso causava o erro no seu print)
-        logger: pino({ level: 'silent' }), 
-        browser: ["Zap Financeiro", "Chrome", "1.0.0"] // Ajuda na identificação
+        auth: {
+            creds: state.creds,
+            // Correção vital para estabilidade:
+            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
+        },
+        // Logger ligado no modo 'info' para vermos o que está acontecendo
+        logger: pino({ level: 'info' }), 
+        printQRInTerminal: false, // Desligado para usarmos o manual
+        syncFullHistory: false // Acelera o boot
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -47,19 +52,25 @@ async function connectToWhatsApp() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
+        // Se receber o QR Code, imprime ele!
         if(qr) {
-            // Gerador de QR Code Manual
+            console.log('\n\n=============================================================');
+            console.log('👇 ESCANEIE O QR CODE ABAIXO NO SEU WHATSAPP 👇');
+            console.log('=============================================================');
             qrcode.generate(qr, { small: true });
-            console.log('\n👇 ESCANEIE ESTE QR (BAILEYS):');
-            console.log(`Link Backup: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
+            console.log(`\nLink Alternativo: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
         }
 
         if(connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Conexão fechada. Reconectando...', shouldReconnect);
-            if(shouldReconnect) connectToWhatsApp();
+            const reason = (lastDisconnect?.error)?.output?.statusCode;
+            console.log(`🚨 Conexão fechada! Motivo: ${reason} | Reconectando...`);
+            
+            const shouldReconnect = reason !== DisconnectReason.loggedOut;
+            if(shouldReconnect) {
+                setTimeout(connectToWhatsApp, 3000); // Espera 3s antes de tentar de novo
+            }
         } else if(connection === 'open') {
-            console.log('✅ Bot Online com Baileys!');
+            console.log('✅ BOT CONECTADO E PRONTO!');
         }
     });
 
@@ -70,7 +81,6 @@ async function connectToWhatsApp() {
         const texto = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').toLowerCase().trim();
         if(!texto) return;
 
-        // Anti-Loop (Ignora mensagens do próprio bot)
         if (msg.key.fromMe && (texto.startsWith('📝') || texto.startsWith('📊') || texto.startsWith('🤖') || texto.startsWith('✅'))) return;
 
         const jid = msg.key.remoteJid;
