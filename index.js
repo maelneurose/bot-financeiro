@@ -12,32 +12,37 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (A CONFIGURAÇÃO QUE VIBROU) ===
+// === CLIENTE WHATSAPP (A VERSÃO CERTA) ===
 const client = new Client({
-    // NoAuth: Começa limpo, sem lixo de sessões anteriores
-    authStrategy: new NoAuth(),
+    // LocalAuth: Salva a sessão para não precisar ler QR Code toda hora
+    authStrategy: new LocalAuth({ 
+        clientId: 'sessao-definitiva-win',
+        dataPath: '/app/.wwebjs_auth'
+    }),
     
-    // IMPORTANTE: Tempo infinito. Se der "Conectando...", ele não desiste.
+    // Configurações vitais para não desconectar
     authTimeoutMs: 0, 
     qrMaxRetries: 10,
     
     puppeteer: {
         headless: 'new',
         executablePath: '/usr/bin/chromium',
+        // 👇 ISSO AQUI EVITA O ERRO DE TIMEOUT QUE DEU ANTES 👇
+        protocolTimeout: 0, 
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage', // Vital para não travar na Railway
+            '--disable-dev-shm-usage', // Vital para Railway
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
             '--single-process', 
             '--disable-gpu',
-            // 👇 VOLTAMOS PARA O WINDOWS (O ÚNICO QUE SEU CELULAR ACEITOU) 👇
+            // Disfarce de Windows (O ÚNICO QUE O SEU CELULAR ACEITOU)
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 A VERSÃO QUE FUNCIONOU. NÃO MEXA AQUI. 👇
+    // 👇 A VERSÃO QUE FEZ O CELULAR VIBRAR 👇
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
@@ -143,9 +148,9 @@ client.on('qr', (qr) => {
 client.on('ready', () => console.log('✅ Bot Online!'));
 
 client.on('message_create', async (msg) => {
-    // Lógica para permitir que VOCÊ fale com o BOT
     if (msg.from.includes('@g.us')) return;
 
+    // Proteção para não responder a si mesmo
     if (msg.fromMe) {
         if (msg.body.startsWith('📝') || msg.body.startsWith('📊') || msg.body.startsWith('🤖') || 
             msg.body.startsWith('✅') || msg.body.startsWith('🔒') || msg.body.startsWith('⚠️')) {
