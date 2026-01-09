@@ -1,8 +1,7 @@
 FROM node:20-bookworm-slim
 
-# Instala Git e dependências do Chrome
+# Instala Chrome e dependências
 RUN apt-get update && apt-get install -y \
-    git \
     chromium \
     libnss3 \
     libxss1 \
@@ -10,18 +9,14 @@ RUN apt-get update && apt-get install -y \
     libatk-bridge2.0-0 \
     libgtk-3-0 \
     libgbm-dev \
-    wget \
-    tar \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copia apenas o package.json primeiro
-COPY package.json ./
+COPY package*.json ./
 
-# TRUQUE: Instala dependências, mas força a versão correta do Whatsapp via Git direto
+# Instalação padrão (vai pegar o link do package.json acima)
 RUN npm install
-RUN npm install github:pedroslopez/whatsapp-web.js#webpack-exodus
 
 COPY . .
 
