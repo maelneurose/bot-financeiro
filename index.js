@@ -12,11 +12,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP ===
+// === CLIENTE WHATSAPP (VERSÃO QUE VIBRA + CHAT LIBERADO) ===
 const client = new Client({
+    // Usamos NoAuth para limpar qualquer erro de sessão anterior
     authStrategy: new NoAuth(),
     
-    // Configurações para evitar quedas e timeouts
     authTimeoutMs: 120000, 
     qrMaxRetries: 10,
     
@@ -31,17 +31,19 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            '--disable-features=IsolateOrigins,site-per-process', // Ajuda no erro de Timeout
+            '--disable-features=IsolateOrigins,site-per-process', 
+            // Disfarce de Windows (Fundamental para o QR ler)
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
+    // 👇 VOLTEI PARA A VERSÃO QUE O SEU CELULAR ACEITOU ANTES 👇
     webVersionCache: {
         type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2403.2.html',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
 });
 
-// === FUNÇÕES ===
+// === FUNÇÕES DO SISTEMA ===
 
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
@@ -140,18 +142,16 @@ client.on('qr', (qr) => {
 client.on('ready', () => console.log('✅ Bot Online!'));
 
 client.on('message_create', async (msg) => {
-    // 1. Ignora grupos (continua igual)
+    // 1. Ignora Grupos
     if (msg.from.includes('@g.us')) return;
 
-    // 2. CORREÇÃO: Permite mensagens SUAS, mas bloqueia respostas do próprio bot para evitar loop
+    // 2. CHAT LIBERADO PARA VOCÊ: Só ignora se for a própria resposta do bot (emojis)
     if (msg.fromMe) {
-        // Se a mensagem começar com os emojis que o bot usa, ele ignora (é ele mesmo falando)
         if (msg.body.startsWith('📝') || msg.body.startsWith('📊') || msg.body.startsWith('🤖') || 
             msg.body.startsWith('✅') || msg.body.startsWith('🔒') || msg.body.startsWith('⚠️') || 
             msg.body.startsWith('📉') || msg.body.startsWith('📈') || msg.body.startsWith('💸') || msg.body.startsWith('🤑')) {
             return;
         }
-        // Se não for emoji, é você dando comando -> O código segue e processa!
     }
 
     const texto = msg.body.toLowerCase().trim();
@@ -159,10 +159,7 @@ client.on('message_create', async (msg) => {
     if (!profile && !['ajuda', 'oi'].includes(texto)) return msg.reply('❌ Cadastre-se no site!');
 
     if (texto.includes('lembre')) return await agendarLembrete(msg, texto, profile);
-    
-    // Pequeno ajuste para garantir que ele entenda variações de pedido de resumo
-    if (texto === 'resumo' || texto.includes('quanto gastei') || texto === 'ver resumo') return await verResumo(msg, profile);
-    
+    if (texto === 'resumo' || texto === 'ver resumo' || texto.includes('quanto gastei')) return await verResumo(msg, profile);
     if (texto.startsWith('devo') || texto.includes('me deve')) return await processarDivida(msg, texto, profile);
     if (texto === 'ver dividas') {
         const { data: d } = await supabase.from('debts').select('*').eq('user_id', profile.id).eq('status', 'pending');
