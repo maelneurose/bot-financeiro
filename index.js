@@ -14,39 +14,37 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 // === CLIENTE WHATSAPP ===
 const client = new Client({
-    // NoAuth: Começa 100% limpo. Essencial quando o QR para de ler.
+    // NoAuth: Para garantir leitura limpa do QR Code novo
     authStrategy: new NoAuth(),
-
-    // Paciência infinita (0) para não dar timeout
-    authTimeoutMs: 0,
+    
+    // Configurações para não cair a conexão
+    authTimeoutMs: 0, 
     qrMaxRetries: 10,
     
     puppeteer: {
         headless: 'new',
         executablePath: '/usr/bin/chromium',
-        // Comandos para economizar RAM e evitar o "Protocol Error"
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage', // OBRIGATÓRIO
+            '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--single-process', // Economiza muita RAM
+            '--single-process', 
             '--disable-gpu',
-            '--disable-extensions',
-            // O disfarce que funcionou
+            // User Agent de Windows (Essencial para leitura)
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 A SALVADORA DA PÁTRIA: Versão 2.2412.54 👇
+    // 👇 Versão que o celular aceita (mantida) 👇
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
 });
 
-// === FUNÇÕES ===
+// === FUNÇÕES DO BOT ===
 function escolherEmoji(texto, tipo) { if (tipo === 'income') return '🤑'; if (texto.includes('cerveja') || texto.includes('chopp')) return '🍺'; return '💸'; }
 function calcularTempoDeVida(valor, salario, horasMensais) { if (!salario || !horasMensais) return null; const valorPorHora = salario / horasMensais; const horasGastas = valor / valorPorHora; return horasGastas < 1 ? `${Math.round(horasGastas * 60)} min` : `${horasGastas.toFixed(1)} hrs`; }
 async function verificarLimite(profile, msg) {
@@ -64,15 +62,14 @@ async function processarDivida(msg, texto, profile) { if (!(await verificarLimit
 
 client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
-    // Link manual caso o terminal falhe
-    console.log(`\nLink QR: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
+    console.log(`\nLINK QR MANUAL: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
 });
 
 client.on('ready', () => console.log('✅ Bot Online!'));
 
 client.on('message_create', async (msg) => {
     if (msg.from.includes('@g.us')) return;
-    if (msg.fromMe && (msg.body.startsWith('📝') || msg.body.startsWith('🤖'))) return; // Ignora apenas emojis do bot
+    if (msg.fromMe && (msg.body.startsWith('📝') || msg.body.startsWith('🤖'))) return; 
     
     const texto = msg.body.toLowerCase().trim();
     const { data: profile } = await supabase.from('profiles').select('*').eq('phone', msg.from.replace('@c.us', '')).single();
