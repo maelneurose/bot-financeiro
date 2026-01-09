@@ -1,3 +1,5 @@
+const http = require("http");
+
 const {
   makeWASocket,
   useMultiFileAuthState,
@@ -20,14 +22,30 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === LÓGICA DO BOT (igual a sua) ===
-function escolherEmoji(texto, tipo) { if (tipo === "income") return "🤑"; if (texto.includes("cerveja") || texto.includes("chopp")) return "🍺"; return "💸"; }
-function calcularTempoDeVida(valor, salario, horasMensais) { if (!salario || !horasMensais) return null; const valorPorHora = salario / horasMensais; const horasGastas = valor / valorPorHora; return horasGastas < 1 ? `${Math.round(horasGastas * 60)} min` : `${horasGastas.toFixed(1)} hrs`; }
+// === (SUA LÓGICA DO BOT) ===
+function escolherEmoji(texto, tipo) {
+  if (tipo === "income") return "🤑";
+  if (texto.includes("cerveja") || texto.includes("chopp")) return "🍺";
+  return "💸";
+}
+function calcularTempoDeVida(valor, salario, horasMensais) {
+  if (!salario || !horasMensais) return null;
+  const valorPorHora = salario / horasMensais;
+  const horasGastas = valor / valorPorHora;
+  return horasGastas < 1 ? `${Math.round(horasGastas * 60)} min` : `${horasGastas.toFixed(1)} hrs`;
+}
 
 async function verificarLimite(sock, jid, profile) {
   if (profile.is_pro) return true;
-  const { count: qtdGastos } = await supabase.from("transactions").select("*", { count: "exact", head: true }).eq("user_id", profile.id);
-  const { count: qtdDividas } = await supabase.from("debts").select("*", { count: "exact", head: true }).eq("user_id", profile.id);
+  const { count: qtdGastos } = await supabase
+    .from("transactions")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", profile.id);
+  const { count: qtdDividas } = await supabase
+    .from("debts")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", profile.id);
+
   if ((qtdGastos || 0) + (qtdDividas || 0) >= 5) {
     await sock.sendMessage(jid, { text: `🔒 *LIMITE ATINGIDO!*\n🚀 Assine: ${LINK_DO_SITE}` });
     return false;
@@ -79,8 +97,8 @@ async function verResumo(sock, jid, profile) {
 
   if (!trans || !trans.length) return sock.sendMessage(jid, { text: "🤷‍♂️ Nada nos últimos 7 dias." });
 
-  let total = 0,
-    txt = `📊 *Resumo (7 Dias)*\n`;
+  let total = 0;
+  let txt = `📊 *Resumo (7 Dias)*\n`;
   trans.forEach((t) => {
     total += t.amount;
     txt += `💸 ${t.description.substring(0, 15)}.. R$ ${t.amount}\n`;
@@ -95,9 +113,9 @@ async function processarTransacao(sock, jid, texto, profile) {
   let tipo = texto.match(/^(recebi|ganhei|caiu|salario)/) ? "income" : "expense";
   const itens = texto.split(/\s+e\s+|,\s+/);
 
-  let txt = `📝 *Relatório*\n`,
-    total = 0,
-    achou = false;
+  let txt = `📝 *Relatório*\n`;
+  let total = 0;
+  let achou = false;
 
   for (let item of itens) {
     const match = item.match(/(\d+[.,]?\d*)/);
@@ -167,13 +185,63 @@ async function processarDivida(sock, jid, texto, profile) {
   }
 }
 
-// === CONEXÃO BAILEYS (corrigida p/ QR confiável e estável) ===
+// === HTTP (pra Railway não matar o processo + página de QR) ===
+let lastQrString = null;
+
+function startHttpServer() {
+  const port = Number(process.env.PORT || 3000);
+
+  const server = http.createServer((req, res) => {
+    if (req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      return res.end("ok");
+    }
+
+    if (req.url === "/qr") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+
+      if (!lastQrString) {
+        return res.end(`
+          <html><body style="font-family: Arial; padding: 24px">
+            <h2>QR ainda não gerado</h2>
+            <p>Volte em alguns segundos e recarregue.</p>
+            <p><a href="/qr">Recarregar</a></p>
+          </body></html>
+        `);
+      }
+
+      const img =
+        "https://api.qrserver.com/v1/create-qr-code/" +
+        `?size=900x900&ecc=H&data=${encodeURIComponent(lastQrString)}`;
+
+      return res.end(`
+        <html>
+          <body style="font-family: Arial; padding: 24px; text-align:center">
+            <h2>Escaneie no WhatsApp (Aparelhos conectados)</h2>
+            <p>Abra no PC/Notebook e escaneie com o celular.</p>
+            <img src="${img}" style="width: 420px; max-width: 90vw; image-rendering: pixelated" />
+            <p style="margin-top:16px"><a href="/qr">Recarregar</a></p>
+          </body>
+        </html>
+      `);
+    }
+
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("bot online");
+  });
+
+  server.listen(port, () => {
+    console.log(`🌐 HTTP pronto em :${port} (rotas: /health, /qr)`);
+  });
+}
+
+// === CONEXÃO BAILEYS ===
 let reconnectAttempts = 0;
 
 async function connectToWhatsApp() {
   const logger = pino({ level: "info" });
 
-  // NÃO troque a pasta toda hora — isso invalida sessão e te obriga a parear sempre
+  // Importante: manter a mesma pasta (senão você invalida sessão toda hora)
   const { state, saveCreds } = await useMultiFileAuthState("baileys_auth");
 
   console.log("🔄 Buscando versão mais recente do WhatsApp Web...");
@@ -183,20 +251,18 @@ async function connectToWhatsApp() {
   const sock = makeWASocket({
     version,
     logger,
-    // isso ajuda a "parecer" um navegador real
     browser: ["Chrome (Linux)", "Chrome", "120.0.0"],
-
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
     },
 
-    // QR
-    printQRInTerminal: true, // <- importante: não dependa do link!
-    markOnlineOnConnect: false,
-    syncFullHistory: false,
+    // QR: confie no terminal e na rota /qr (evita print “distorcido” por terceiros)
+    printQRInTerminal: true,
 
     // estabilidade
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
     connectTimeoutMs: 60_000,
     defaultQueryTimeoutMs: 60_000,
     keepAliveIntervalMs: 25_000,
@@ -209,36 +275,27 @@ async function connectToWhatsApp() {
 
     if (qr) {
       reconnectAttempts = 0;
+      lastQrString = qr;
 
       console.log("\n=============================================================");
       console.log("✅ QR CODE GERADO — ESCANEIE PELO CELULAR (Aparelhos conectados)");
-      // sem small=true para não distorcer
       qrcode.generate(qr, { small: false });
-
-      // link mais legível e com ECC alto (e maior)
-      const qrLink =
-        "https://api.qrserver.com/v1/create-qr-code/" +
-        `?size=600x600&ecc=H&data=${encodeURIComponent(qr)}`;
-
-      console.log("\n📌 Se precisar abrir no navegador, use IMEDIATAMENTE este link:");
-      console.log(qrLink);
+      console.log("🌐 Abra /qr no seu domínio da Railway para ver o QR grande.");
       console.log("=============================================================\n");
     }
 
     if (connection === "close") {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const reason = lastDisconnect?.error?.output?.payload?.message || lastDisconnect?.error?.message;
+      const reason =
+        lastDisconnect?.error?.output?.payload?.message || lastDisconnect?.error?.message;
 
       console.log(`🚨 Conexão fechada. statusCode=${statusCode} reason=${reason}`);
 
-      const loggedOut = statusCode === DisconnectReason.loggedOut;
-
-      if (loggedOut) {
+      if (statusCode === DisconnectReason.loggedOut) {
         console.log("❌ Logged out. Apague a pasta 'baileys_auth' e pareie novamente.");
         return;
       }
 
-      // backoff pra não entrar em loop agressivo
       reconnectAttempts += 1;
       const waitMs = Math.min(30_000, 2_000 * reconnectAttempts);
       console.log(`⏳ Reconnect em ${waitMs / 1000}s (tentativa ${reconnectAttempts})...`);
@@ -251,7 +308,7 @@ async function connectToWhatsApp() {
     }
   });
 
-  // === MENSAGENS (igual o seu) ===
+  // === mensagens (seu código) ===
   sock.ev.on("messages.upsert", async (m) => {
     try {
       const msg = m.messages[0];
@@ -282,27 +339,16 @@ async function connectToWhatsApp() {
       if (texto.startsWith("devo") || texto.includes("me deve")) return await processarDivida(sock, jid, texto, profile);
 
       if (texto === "ver dividas") {
-        const { data: d } = await supabase
-          .from("debts")
-          .select("*")
-          .eq("user_id", profile.id)
-          .eq("status", "pending");
-
-        const resp =
-          d && d.length
-            ? d
-                .map((x) => `${x.type === "owe" ? "🔴 Devo" : "🟢 Me deve"} ${x.amount} (${x.description})`)
-                .join("\n")
-            : "✅ Nada pendente.";
+        const { data: d } = await supabase.from("debts").select("*").eq("user_id", profile.id).eq("status", "pending");
+        const resp = d && d.length
+          ? d.map((x) => `${x.type === "owe" ? "🔴 Devo" : "🟢 Me deve"} ${x.amount} (${x.description})`).join("\n")
+          : "✅ Nada pendente.";
         return await sock.sendMessage(jid, { text: resp });
       }
 
       if (texto.startsWith("!config")) {
         const [_, sal, hrs] = texto.split(" ");
-        await supabase
-          .from("profiles")
-          .update({ salary: parseFloat(sal), work_hours: parseFloat(hrs) })
-          .eq("id", profile.id);
+        await supabase.from("profiles").update({ salary: parseFloat(sal), work_hours: parseFloat(hrs) }).eq("id", profile.id);
         return await sock.sendMessage(jid, { text: "✅ Configurado!" });
       }
 
@@ -314,16 +360,14 @@ async function connectToWhatsApp() {
           .order("date", { ascending: false })
           .limit(1)
           .single();
+
         if (ult) {
           await supabase.from("transactions").delete().eq("id", ult.id);
           return await sock.sendMessage(jid, { text: "🗑️ Desfeito!" });
         }
       }
 
-      if (
-        texto.match(/^(gastei|comprei|paguei|recebi|ganhei|caiu|salario)/) ||
-        texto.match(/^\d+/)
-      ) {
+      if (texto.match(/^(gastei|comprei|paguei|recebi|ganhei|caiu|salario)/) || texto.match(/^\d+/)) {
         await processarTransacao(sock, jid, texto, profile);
       }
     } catch (err) {
@@ -332,4 +376,6 @@ async function connectToWhatsApp() {
   });
 }
 
+// START
+startHttpServer();
 connectToWhatsApp();
