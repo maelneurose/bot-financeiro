@@ -1,4 +1,4 @@
-const { makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const { createClient } = require('@supabase/supabase-js');
 const schedule = require('node-schedule');
@@ -72,7 +72,6 @@ async function verResumo(sock, jid, profile) {
         total += t.amount; 
         txt += `💸 ${t.description.substring(0,15)}.. R$ ${t.amount}\n`; 
     }); 
-    // CORREÇÃO DO ERRO AQUI: Adicionei o fechamento correto do objeto }
     await sock.sendMessage(jid, { text: txt + `🚨 *Total:* R$ ${total.toFixed(2)}` }); 
 }
 
@@ -117,18 +116,16 @@ async function processarDivida(sock, jid, texto, profile) {
 
 // === CONEXÃO BAILEYS ===
 async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_baileys_v3_fixed');
+    // ⚠️ SESSÃO NOVA E LIMPA
+    const { state, saveCreds } = await useMultiFileAuthState('sessao_v5_limpa');
     
-    console.log('🔄 Iniciando conexão Baileys...');
+    console.log('🔄 Iniciando conexão Baileys (Modo Limpo)...');
 
     const sock = makeWASocket({
-        auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'error' }))
-        },
-        logger: pino({ level: 'info' }), 
+        auth: state,
+        // Configuração Padrão (Sem 'browser' customizado para evitar erro 405)
         printQRInTerminal: false,
-        browser: ["Zap Financeiro", "Chrome", "1.0.0"],
+        logger: pino({ level: 'info' }), 
         connectTimeoutMs: 60000, 
     });
 
@@ -139,7 +136,7 @@ async function connectToWhatsApp() {
         
         if(qr) {
             console.log('\n=============================================================');
-            console.log('👇 QR CODE GERADO COM SUCESSO! 👇');
+            console.log('👇 QR CODE PRONTO PARA ESCANEAR 👇');
             qrcode.generate(qr, { small: true });
             console.log(`\nLink: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`);
             console.log('=============================================================\n');
@@ -147,17 +144,17 @@ async function connectToWhatsApp() {
 
         if(connection === 'close') {
             const reason = (lastDisconnect?.error)?.output?.statusCode;
-            console.log(`🚨 CONEXÃO CAIU! Código: ${reason}`);
+            console.log(`🚨 Status da Conexão: ${reason}`);
             
             const shouldReconnect = reason !== DisconnectReason.loggedOut;
             if(shouldReconnect) {
-                console.log('⏳ Esperando 5 segundos para reconectar...');
+                console.log('⏳ Reiniciando em 5 segundos...');
                 setTimeout(connectToWhatsApp, 5000);
             } else {
-                console.log('❌ Logout. Apague a pasta de sessão.');
+                console.log('❌ Sessão encerrada. Apague a pasta e tente de novo.');
             }
         } else if(connection === 'open') {
-            console.log('✅ BOT ONLINE! CONECTADO!');
+            console.log('✅ CONECTADO COM SUCESSO! 🚀');
         }
     });
 
@@ -179,7 +176,7 @@ async function connectToWhatsApp() {
                 return;
             }
 
-            if (['ajuda', 'menu', 'oi'].includes(texto)) await sock.sendMessage(jid, { text: `🤖 *Bot Baileys*\n• Gastei 10\n• Devo 50` });
+            if (['ajuda', 'menu', 'oi'].includes(texto)) await sock.sendMessage(jid, { text: `🤖 *Bot Online*\n• Gastei 10\n• Devo 50` });
             
             if (texto.includes('lembre')) return await agendarLembrete(sock, jid, texto, profile);
             if (texto.includes('resumo') || texto.includes('gastei')) return await verResumo(sock, jid, profile);
@@ -190,18 +187,8 @@ async function connectToWhatsApp() {
                 const resp = d && d.length ? d.map(x => `${x.type === 'owe' ? '🔴 Devo' : '🟢 Me deve'} ${x.amount} (${x.description})`).join('\n') : '✅ Nada pendente.'; 
                 return await sock.sendMessage(jid, { text: resp }); 
             }
-            
-            if (texto.startsWith('!config')) { 
-                const [_, sal, hrs] = texto.split(' '); 
-                await supabase.from('profiles').update({ salary: parseFloat(sal), work_hours: parseFloat(hrs) }).eq('id', profile.id); 
-                return await sock.sendMessage(jid, { text: '✅ Configurado!' }); 
-            }
-            
-            if (texto === 'desfazer') { 
-                const { data: ult } = await supabase.from('transactions').select('id').eq('user_id', profile.id).order('date', { ascending: false }).limit(1).single(); 
-                if (ult) { await supabase.from('transactions').delete().eq('id', ult.id); return await sock.sendMessage(jid, { text: '🗑️ Desfeito!' }); } 
-            }
-            
+            if (texto.startsWith('!config')) { const [_, sal, hrs] = texto.split(' '); await supabase.from('profiles').update({ salary: parseFloat(sal), work_hours: parseFloat(hrs) }).eq('id', profile.id); return await sock.sendMessage(jid, { text: '✅ Configurado!' }); }
+            if (texto === 'desfazer') { const { data: ult } = await supabase.from('transactions').select('id').eq('user_id', profile.id).order('date', { ascending: false }).limit(1).single(); if (ult) { await supabase.from('transactions').delete().eq('id', ult.id); return await sock.sendMessage(jid, { text: '🗑️ Desfeito!' }); } }
             if (texto.match(/^(gastei|comprei|paguei|recebi|ganhei|caiu|salario)/) || texto.match(/^\d+/)) await processarTransacao(sock, jid, texto, profile);
 
         } catch (err) {
