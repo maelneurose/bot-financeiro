@@ -1,4 +1,4 @@
-const { makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, delay } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, delay } = require('@whiskeysockets/baileys');
 const { createClient } = require('@supabase/supabase-js');
 const schedule = require('node-schedule');
 const pino = require('pino');
@@ -7,25 +7,23 @@ const pino = require('pino');
 const SUPABASE_URL = 'https://gukvjlhgvgoaqbgiuveq.supabase.co'; 
 const SUPABASE_KEY = process.env.SUPABASE_KEY || ''; 
 const LINK_DO_SITE = 'https://ultima-chance-app.vercel.app';
-// 👇 IMPORTANTE: COLOQUE AQUI O SEU NÚMERO EXATAMENTE COMO NO WHATSAPP (COM DDI E DDD)
-// Exemplo: 5511999999999 (Sem + e sem traços)
+
+// 👇 SEU NÚMERO (Confira se está certo)
 const MEU_NUMERO_TELEFONE = '5511999999999'; 
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === LÓGICA DO BOT (Mesma de antes) ===
+// === FUNÇÕES (MANTIDAS) ===
 function escolherEmoji(texto, tipo) { if (tipo === 'income') return '🤑'; if (texto.includes('cerveja') || texto.includes('chopp')) return '🍺'; return '💸'; }
 function calcularTempoDeVida(valor, salario, horasMensais) { if (!salario || !horasMensais) return null; const valorPorHora = salario / horasMensais; const horasGastas = valor / valorPorHora; return horasGastas < 1 ? `${Math.round(horasGastas * 60)} min` : `${horasGastas.toFixed(1)} hrs`; }
-
 async function verificarLimite(sock, jid, profile) {
     if (profile.is_pro) return true;
     const { count: qtdGastos } = await supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
     const { count: qtdDividas } = await supabase.from('debts').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
     if ((qtdGastos || 0) + (qtdDividas || 0) >= 5) { await sock.sendMessage(jid, { text: `🔒 *LIMITE ATINGIDO!*\n🚀 Assine: ${LINK_DO_SITE}` }); return false; } return true; 
 }
-
 async function agendarLembrete(sock, jid, texto, profile) {
     const matchDia = texto.match(/dia\s+(\d+)/); if (!matchDia) return sock.sendMessage(jid, { text: '⚠️ Ex: "Lembre de pagar a luz dia 25"' }); const dia = parseInt(matchDia[1]); const mensagem = texto.replace('lembre', '').replace('me lembre', '').replace(/dia\s+\d+/, '').trim(); let data = new Date(); data.setDate(dia); data.setHours(9, 0, 0, 0); if (data < new Date()) data.setMonth(data.getMonth() + 1); await supabase.from('reminders').insert({ user_id: profile.id, message: mensagem, remind_at: data.toISOString(), status: 'pending' }); schedule.scheduleJob(data, function(){ const destino = profile.phone.includes('@') ? profile.phone : `${profile.phone}@s.whatsapp.net`; sock.sendMessage(destino, { text: `⏰ *LEMBRETE!* \n📌 ${mensagem}` }); }); await sock.sendMessage(jid, { text: `✅ *Agendado!* Dia ${dia} às 09:00.` });
 }
@@ -35,41 +33,44 @@ async function processarDivida(sock, jid, texto, profile) { if (!(await verifica
 
 // === CONEXÃO VIA PAREAMENTO (SEM QR CODE) ===
 async function connectToWhatsApp() {
-    const { state, saveCreds } = await useMultiFileAuthState('sessao_pairing_code');
-    const { version } = await fetchLatestBaileysVersion();
+    // ⚠️ NOVA PASTA PARA LIMPAR QUALQUER ERRO
+    const { state, saveCreds } = await useMultiFileAuthState('sessao_windows_final');
     
-    console.log(`🔄 Versão do Baileys: ${version.join('.')}`);
+    // Versão Fixa e Estável
+    const version = [2, 3000, 1015901307];
 
     const sock = makeWASocket({
         version,
         auth: {
             creds: state.creds,
+            // Cache de chaves ajuda na estabilidade
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false, // Desligado pois vamos usar código
-        browser: ["Chrome (Linux)", "", ""], // Browser limpo ajuda no pareamento
+        printQRInTerminal: false,
+        // ⚠️ DISFARCE DE WINDOWS (O Segredo)
+        browser: ["Windows", "Chrome", "10.0.0"], 
         connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 60000,
+        retryRequestDelayMs: 5000, // Espera mais se der erro
         syncFullHistory: false
     });
 
     // 🚀 LÓGICA DO CÓDIGO DE PAREAMENTO
     if (!sock.authState.creds.me && !sock.authState.creds.registered) {
-        // Espera um pouco para o socket iniciar
         setTimeout(async () => {
             try {
                 // Gera o código
                 const code = await sock.requestPairingCode(MEU_NUMERO_TELEFONE);
                 console.log('\n\n=============================================================');
-                console.log('📱 CÓDIGO DE PAREAMENTO GERADO:');
+                console.log('📱 CÓDIGO DE PAREAMENTO (MODO WINDOWS):');
                 console.log(`\n   ${code?.match(/.{1,4}/g)?.join('-') || code}   \n`);
-                console.log('👉 No seu celular: WhatsApp > Aparelhos Conectados > Conectar');
-                console.log('👉 Clique em "Conectar com número de telefone" e digite este código.');
+                console.log('👉 No celular: WhatsApp > Aparelhos Conectados > Conectar com número');
                 console.log('=============================================================\n\n');
             } catch (err) {
-                console.log('Erro ao gerar código de pareamento:', err);
+                console.log('Erro ao gerar código (Tente reiniciar):', err);
             }
-        }, 5000);
+        }, 6000);
     }
 
     sock.ev.on('creds.update', saveCreds);
@@ -91,6 +92,7 @@ async function connectToWhatsApp() {
         }
     });
 
+    // Lógica de mensagens mantida...
     sock.ev.on('messages.upsert', async m => {
         try {
             const msg = m.messages[0];
