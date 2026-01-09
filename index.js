@@ -1,4 +1,4 @@
-const { Client, LocalAuth, NoAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { createClient } = require('@supabase/supabase-js');
 const schedule = require('node-schedule'); 
@@ -12,13 +12,16 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (A VERSÃO CERTA) ===
+// === CLIENTE WHATSAPP (A VERSÃO CERTA + LIMPEZA) ===
 const client = new Client({
-    // NoAuth: Começa limpo, sem vícios de sessões que deram errado
-    authStrategy: new NoAuth(),
+    // Usamos LocalAuth com um nome NOVO para criar uma pasta limpa do zero
+    authStrategy: new LocalAuth({ 
+        clientId: 'sessao-final-v2',
+        dataPath: '/app/.wwebjs_auth'
+    }),
     
-    // Aumenta o tempo para o celular não desconectar enquanto carrega
-    authTimeoutMs: 120000, 
+    // Configurações de paciência (evita desconectar rápido)
+    authTimeoutMs: 0, // 0 = Espera infinita (até conectar)
     qrMaxRetries: 10,
     
     puppeteer: {
@@ -27,17 +30,17 @@ const client = new Client({
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
+            '--disable-dev-shm-usage', // Vital para Railway
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
             '--disable-features=IsolateOrigins,site-per-process', 
-            // Disfarce de Windows (Obrigatório para o QR ler)
+            // Disfarce Windows (O único que vibrou no seu celular)
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 ESSA É A VERSÃO QUE FEZ SEU CELULAR VIBRAR. É ELA QUE VAMOS USAR. 👇
+    // 👇 A VERSÃO QUE O SEU CELULAR LEU (VIBRAR) 👇
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
@@ -143,12 +146,15 @@ client.on('qr', (qr) => {
 client.on('ready', () => console.log('✅ Bot Online!'));
 
 client.on('message_create', async (msg) => {
-    // 1. Ignora grupos
     if (msg.from.includes('@g.us')) return;
 
-    // 2. Lógica para Números Diferentes (Mael Novo -> Mael Pessoal)
-    // Se a mensagem não é minha (msg.fromMe == false), significa que é você (pessoal) mandando.
-    // O código abaixo JÁ ESTÁ PRONTO para isso.
+    // Proteção para não responder a si mesmo (Loop)
+    if (msg.fromMe) {
+        if (msg.body.startsWith('📝') || msg.body.startsWith('📊') || msg.body.startsWith('🤖') || 
+            msg.body.startsWith('✅') || msg.body.startsWith('🔒') || msg.body.startsWith('⚠️')) {
+            return;
+        }
+    }
 
     const texto = msg.body.toLowerCase().trim();
     const { data: profile } = await supabase.from('profiles').select('*').eq('phone', msg.from.replace('@c.us', '')).single();
