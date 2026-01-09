@@ -32,19 +32,18 @@ async function processarDivida(sock, jid, texto, profile) { if (!(await verifica
 
 // === CONEXÃO BAILEYS ===
 async function connectToWhatsApp() {
-    // ⚠️ Nome de pasta novo para garantir limpeza
-    const { state, saveCreds } = await useMultiFileAuthState('auth_baileys_final');
+    // ⚠️ MUDEI O NOME DA PASTA PARA 'sessao_baileys_do_zero' PARA FUGIR DO LOOP
+    const { state, saveCreds } = await useMultiFileAuthState('sessao_baileys_do_zero');
     
     const sock = makeWASocket({
         auth: {
             creds: state.creds,
-            // Correção vital para estabilidade:
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
-        // Logger ligado no modo 'info' para vermos o que está acontecendo
-        logger: pino({ level: 'info' }), 
-        printQRInTerminal: false, // Desligado para usarmos o manual
-        syncFullHistory: false // Acelera o boot
+        // Logger limpo para destacar o QR Code
+        logger: pino({ level: 'silent' }), 
+        printQRInTerminal: true, // LIGUEI O NATIVO DE VOLTA (Geralmente o Baileys imprime certinho)
+        // Removi configurações manuais de navegador para usar o padrão seguro do Baileys
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -52,25 +51,24 @@ async function connectToWhatsApp() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
-        // Se receber o QR Code, imprime ele!
         if(qr) {
             console.log('\n\n=============================================================');
-            console.log('👇 ESCANEIE O QR CODE ABAIXO NO SEU WHATSAPP 👇');
-            console.log('=============================================================');
-            qrcode.generate(qr, { small: true });
-            console.log(`\nLink Alternativo: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
+            console.log('👇 SE O TERMINAL FICAR RUIM, USE O LINK:');
+            console.log(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`);
+            console.log('=============================================================\n');
         }
 
         if(connection === 'close') {
             const reason = (lastDisconnect?.error)?.output?.statusCode;
-            console.log(`🚨 Conexão fechada! Motivo: ${reason} | Reconectando...`);
-            
-            const shouldReconnect = reason !== DisconnectReason.loggedOut;
-            if(shouldReconnect) {
-                setTimeout(connectToWhatsApp, 3000); // Espera 3s antes de tentar de novo
+            // Se o erro for 401 (Logged Out), deletamos a pasta para tentar de novo do zero
+            if (reason === DisconnectReason.loggedOut) {
+                console.log('⚠️ Conexão recusada. Você precisa escanear novamente.');
+            } else {
+                console.log(`🚨 Conexão caiu (${reason}). Reconectando...`);
+                connectToWhatsApp();
             }
         } else if(connection === 'open') {
-            console.log('✅ BOT CONECTADO E PRONTO!');
+            console.log('✅ BOT ONLINE COM SUCESSO! 🚀');
         }
     });
 
@@ -81,6 +79,7 @@ async function connectToWhatsApp() {
         const texto = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').toLowerCase().trim();
         if(!texto) return;
 
+        // Anti-Loop (Ignora mensagens do próprio bot)
         if (msg.key.fromMe && (texto.startsWith('📝') || texto.startsWith('📊') || texto.startsWith('🤖') || texto.startsWith('✅'))) return;
 
         const jid = msg.key.remoteJid;
