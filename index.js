@@ -13,7 +13,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === LÓGICA DO BOT (MANTIDA) ===
+// === LÓGICA DO BOT ===
 function escolherEmoji(texto, tipo) { if (tipo === 'income') return '🤑'; if (texto.includes('cerveja') || texto.includes('chopp')) return '🍺'; return '💸'; }
 function calcularTempoDeVida(valor, salario, horasMensais) { if (!salario || !horasMensais) return null; const valorPorHora = salario / horasMensais; const horasGastas = valor / valorPorHora; return horasGastas < 1 ? `${Math.round(horasGastas * 60)} min` : `${horasGastas.toFixed(1)} hrs`; }
 
@@ -32,18 +32,16 @@ async function processarDivida(sock, jid, texto, profile) { if (!(await verifica
 
 // === CONEXÃO BAILEYS ===
 async function connectToWhatsApp() {
-    // ⚠️ MUDEI O NOME DA PASTA PARA 'sessao_baileys_do_zero' PARA FUGIR DO LOOP
-    const { state, saveCreds } = await useMultiFileAuthState('sessao_baileys_do_zero');
+    // ⚠️ Troquei o nome da sessão para limpar o erro 405
+    const { state, saveCreds } = await useMultiFileAuthState('sessao_final_baileys');
     
     const sock = makeWASocket({
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
-        // Logger limpo para destacar o QR Code
         logger: pino({ level: 'silent' }), 
-        printQRInTerminal: true, // LIGUEI O NATIVO DE VOLTA (Geralmente o Baileys imprime certinho)
-        // Removi configurações manuais de navegador para usar o padrão seguro do Baileys
+        // ⚠️ REMOVI A LINHA 'printQRInTerminal' QUE ESTAVA DANDO ERRO
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -51,24 +49,27 @@ async function connectToWhatsApp() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         
+        // Agora o QR Code é gerado manualmente AQUI
         if(qr) {
-            console.log('\n\n=============================================================');
-            console.log('👇 SE O TERMINAL FICAR RUIM, USE O LINK:');
-            console.log(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`);
+            console.log('\n=============================================================');
+            console.log('👇 ESCANEIE O QR CODE ABAIXO:');
+            qrcode.generate(qr, { small: true });
+            console.log(`\nLink Backup: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`);
             console.log('=============================================================\n');
         }
 
         if(connection === 'close') {
             const reason = (lastDisconnect?.error)?.output?.statusCode;
-            // Se o erro for 401 (Logged Out), deletamos a pasta para tentar de novo do zero
+            // Se foi desconectado (logout), avisa. Senão, reconecta.
             if (reason === DisconnectReason.loggedOut) {
-                console.log('⚠️ Conexão recusada. Você precisa escanear novamente.');
+                console.log('⚠️ Conexão encerrada pelo celular. Escaneie novamente.');
+                // Opcional: deletar a pasta de sessão aqui se quiser resetar automático
             } else {
-                console.log(`🚨 Conexão caiu (${reason}). Reconectando...`);
+                console.log(`🚨 Conexão caiu. Reconectando...`);
                 connectToWhatsApp();
             }
         } else if(connection === 'open') {
-            console.log('✅ BOT ONLINE COM SUCESSO! 🚀');
+            console.log('✅ BOT CONECTADO E PRONTO!');
         }
     });
 
@@ -79,7 +80,6 @@ async function connectToWhatsApp() {
         const texto = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').toLowerCase().trim();
         if(!texto) return;
 
-        // Anti-Loop (Ignora mensagens do próprio bot)
         if (msg.key.fromMe && (texto.startsWith('📝') || texto.startsWith('📊') || texto.startsWith('🤖') || texto.startsWith('✅'))) return;
 
         const jid = msg.key.remoteJid;
@@ -92,6 +92,7 @@ async function connectToWhatsApp() {
              return;
         }
 
+        // Roteamento
         if (texto.includes('lembre')) return await agendarLembrete(sock, jid, texto, profile);
         if (texto.includes('resumo') || texto.includes('gastei')) return await verResumo(sock, jid, profile);
         if (texto.startsWith('devo') || texto.includes('me deve')) return await processarDivida(sock, jid, texto, profile);
