@@ -12,13 +12,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (A COMBINAÇÃO PERFEITA) ===
+// === CLIENTE WHATSAPP (CORREÇÃO UNIVERSAL) ===
 const client = new Client({
-    // Usamos NoAuth para testar a conexão limpa e rápida (sem salvar disco agora)
+    // NoAuth: Essencial agora para limpar o erro "Não foi possível conectar"
     authStrategy: new NoAuth(),
 
-    // Aumentamos o tempo limite para o WhatsApp não desistir da gente
-    authTimeoutMs: 120000, // 2 minutos de paciência
+    // Aumenta a tolerância para internet oscilando
+    authTimeoutMs: 120000, 
     qrMaxRetries: 10,
     
     puppeteer: {
@@ -27,27 +27,24 @@ const client = new Client({
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            // 👇 FLAGS DE VELOCIDADE MÁXIMA (Isso evita o "Conectando..." eterno)
             '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--single-process', 
             '--disable-gpu',
-            '--disable-extensions', // Menos peso
-            '--disable-component-update', // Menos internet
-            // Disfarce de Windows (O que chegou mais longe)
+            '--disable-features=IsolateOrigins,site-per-process', // Ajuda a não travar no carregamento
+            // User Agent de Windows (Padrão Ouro)
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 VOLTAMOS COM A VERSÃO QUE DEU SINAL DE VIDA 👇
+    // 👇 A MUDANÇA CRUCIAL: Versão 2.2403.2 (Mais estável para bibliotecas antigas)
     webVersionCache: {
         type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2403.2.html',
     }
 });
 
-// === FUNÇÕES ===
+// === FUNÇÕES (MANTIDAS) ===
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
     if (texto.includes('cerveja') || texto.includes('chopp') || texto.includes('bar')) return '🍺';
