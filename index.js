@@ -15,8 +15,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 // === CLIENTE WHATSAPP ===
 const client = new Client({
     authStrategy: new NoAuth(),
+    
+    // Configurações para evitar quedas e timeouts
     authTimeoutMs: 120000, 
     qrMaxRetries: 10,
+    
     puppeteer: {
         headless: 'new',
         executablePath: '/usr/bin/chromium',
@@ -28,7 +31,7 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            '--disable-features=IsolateOrigins,site-per-process', 
+            '--disable-features=IsolateOrigins,site-per-process', // Ajuda no erro de Timeout
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
@@ -137,24 +140,28 @@ client.on('qr', (qr) => {
 client.on('ready', () => console.log('✅ Bot Online!'));
 
 client.on('message_create', async (msg) => {
-    // 1. Ignora mensagens de Grupos
+    // 1. Ignora grupos (continua igual)
     if (msg.from.includes('@g.us')) return;
 
-    // 2. PROTEÇÃO ANTI-LOOP: Ignora mensagens que o próprio Bot enviou
-    // Se a mensagem for minha (fromMe) E começar com os emojis que o bot usa, ele ignora.
-    if (msg.fromMe && (msg.body.startsWith('📝') || msg.body.startsWith('📊') || msg.body.startsWith('🤖') || msg.body.startsWith('✅') || msg.body.startsWith('🔒') || msg.body.startsWith('⚠️') || msg.body.startsWith('📉') || msg.body.startsWith('📈'))) {
-        return;
+    // 2. CORREÇÃO: Permite mensagens SUAS, mas bloqueia respostas do próprio bot para evitar loop
+    if (msg.fromMe) {
+        // Se a mensagem começar com os emojis que o bot usa, ele ignora (é ele mesmo falando)
+        if (msg.body.startsWith('📝') || msg.body.startsWith('📊') || msg.body.startsWith('🤖') || 
+            msg.body.startsWith('✅') || msg.body.startsWith('🔒') || msg.body.startsWith('⚠️') || 
+            msg.body.startsWith('📉') || msg.body.startsWith('📈') || msg.body.startsWith('💸') || msg.body.startsWith('🤑')) {
+            return;
+        }
+        // Se não for emoji, é você dando comando -> O código segue e processa!
     }
 
-    // Se passou daqui, é você escrevendo um comando (ex: "Gastei 10")
-    
     const texto = msg.body.toLowerCase().trim();
     const { data: profile } = await supabase.from('profiles').select('*').eq('phone', msg.from.replace('@c.us', '')).single();
     if (!profile && !['ajuda', 'oi'].includes(texto)) return msg.reply('❌ Cadastre-se no site!');
 
     if (texto.includes('lembre')) return await agendarLembrete(msg, texto, profile);
-    // IMPORTANTE: Mudei para 'ver resumo' para evitar confundir com a resposta do bot que contém a palavra 'resumo'
-    if (texto === 'resumo' || texto === 'ver resumo' || texto.includes('quanto gastei')) return await verResumo(msg, profile);
+    
+    // Pequeno ajuste para garantir que ele entenda variações de pedido de resumo
+    if (texto === 'resumo' || texto.includes('quanto gastei') || texto === 'ver resumo') return await verResumo(msg, profile);
     
     if (texto.startsWith('devo') || texto.includes('me deve')) return await processarDivida(msg, texto, profile);
     if (texto === 'ver dividas') {
@@ -171,7 +178,7 @@ client.on('message_create', async (msg) => {
         if (ult) { await supabase.from('transactions').delete().eq('id', ult.id); return msg.reply('🗑️ Desfeito!'); }
     }
     if (texto.match(/^(gastei|comprei|paguei|recebi|ganhei|caiu|salario)/) || texto.match(/^\d+/)) await processarTransacao(msg, texto, profile);
-    if (['ajuda', 'menu', 'oi'].includes(texto)) msg.reply(`🤖 *Menu*\n• Gastei 10\n• Devo 50\n• Resumo\n• Lembre dia 20`);
+    if (['ajuda', 'menu', 'oi', '!ajuda'].includes(texto)) msg.reply(`🤖 *Menu*\n• Gastei 10\n• Devo 50\n• Resumo\n• Lembre dia 20`);
 });
 
 client.initialize();
