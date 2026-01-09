@@ -12,33 +12,32 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (MODO HARD RESET) ===
+// === CLIENTE WHATSAPP (MODO MAC OS + VERSÃO 2.2412.54) ===
 const client = new Client({
-    // 1. NoAuth: Garante que não existe NENHUM arquivo corrompido atrapalhando
+    // NoAuth: Para não salvar lixo e pesar a memória agora
     authStrategy: new NoAuth(),
 
-    // 2. Tempo máximo para não cair a conexão
-    authTimeoutMs: 120000, 
+    // Paciência infinita para conectar
+    authTimeoutMs: 0, 
     qrMaxRetries: 10,
     
     puppeteer: {
-        headless: 'new',
+        headless: true, // Voltei para o 'true' clássico que é mais estável nessa versão
         executablePath: '/usr/bin/chromium',
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage', // CRÍTICO para Railway
+            '--disable-dev-shm-usage', // OBRIGATÓRIO NA RAILWAY
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--single-process', // Economiza RAM
+            '--single-process', 
             '--disable-gpu',
-            '--disable-extensions',
-            // Disfarce de Windows 10
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            // 👇 MUDEI PARA MAC OS (Geralmente conecta melhor na versão .54) 👇
+            '--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 A VERSÃO QUE O SEU CELULAR ACEITA 👇
+    // 👇 A VERSÃO QUE O SEU CELULAR VIBROU. NÃO VAMOS MUDAR ELA. 👇
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
@@ -147,7 +146,7 @@ client.on('message_create', async (msg) => {
     // 1. Ignora Grupos
     if (msg.from.includes('@g.us')) return;
 
-    // 2. Permite mensagens SUAS, mas ignora emojis do bot
+    // 2. Trava anti-loop (Se o bot responder, ele não se ouve)
     if (msg.fromMe) {
         if (msg.body.startsWith('📝') || msg.body.startsWith('📊') || msg.body.startsWith('🤖') || 
             msg.body.startsWith('✅') || msg.body.startsWith('🔒') || msg.body.startsWith('⚠️')) {
