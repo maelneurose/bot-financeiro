@@ -22,12 +22,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === (SUA LÓGICA DO BOT) ===
+// === LÓGICA DO BOT ===
 function escolherEmoji(texto, tipo) {
   if (tipo === "income") return "🤑";
   if (texto.includes("cerveja") || texto.includes("chopp")) return "🍺";
   return "💸";
 }
+
 function calcularTempoDeVida(valor, salario, horasMensais) {
   if (!salario || !horasMensais) return null;
   const valorPorHora = salario / horasMensais;
@@ -239,38 +240,36 @@ function startHttpServer() {
 let reconnectAttempts = 0;
 
 async function connectToWhatsApp() {
-  const logger = pino({ level: "info" });
+  const logger = pino({ level: 'info' });
 
-  // Importante: manter a mesma pasta (senão você invalida sessão toda hora)
-  const { state, saveCreds } = await useMultiFileAuthState("baileys_auth");
+  // Não alterar a pasta para não perder a sessão
+  const { state, saveCreds } = await useMultiFileAuthState('baileys_auth');
 
-  console.log("🔄 Buscando versão mais recente do WhatsApp Web...");
+  console.log('🔄 Buscando versão mais recente do WhatsApp Web...');
   const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(`✅ Usando versão: ${version.join(".")} (isLatest=${isLatest})`);
+  console.log(`✅ Usando a versão do WhatsApp: ${version.join('.')}`);
 
   const sock = makeWASocket({
     version,
     logger,
     browser: ["Chrome (Linux)", "Chrome", "120.0.0"],
+
     auth: {
       creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
+      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
 
-    // QR: confie no terminal e na rota /qr (evita print “distorcido” por terceiros)
-    printQRInTerminal: true,
-
-    // estabilidade
+    printQRInTerminal: true, // Exibe o QR no terminal com maior qualidade
     markOnlineOnConnect: false,
     syncFullHistory: false,
-    connectTimeoutMs: 60_000,
+    connectTimeoutMs: 60_000, // Timeout maior para conexão
     defaultQueryTimeoutMs: 60_000,
     keepAliveIntervalMs: 25_000,
   });
 
-  sock.ev.on("creds.update", saveCreds);
+  sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on("connection.update", (update) => {
+  sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
@@ -279,91 +278,84 @@ async function connectToWhatsApp() {
 
       console.log("\n=============================================================");
       console.log("✅ QR CODE GERADO — ESCANEIE PELO CELULAR (Aparelhos conectados)");
-      qrcode.generate(qr, { small: false });
-      console.log("🌐 Abra /qr no seu domínio da Railway para ver o QR grande.");
+      qrcode.generate(qr, { small: false }); // Exibe o QR com mais qualidade
+      const qrLink = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&ecc=H&data=${encodeURIComponent(qr)}`;
+      console.log(`Se preferir, abra o QR com esse link: ${qrLink}`);
       console.log("=============================================================\n");
     }
 
-    if (connection === "close") {
+    if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const reason =
-        lastDisconnect?.error?.output?.payload?.message || lastDisconnect?.error?.message;
-
+      const reason = lastDisconnect?.error?.output?.payload?.message || lastDisconnect?.error?.message;
       console.log(`🚨 Conexão fechada. statusCode=${statusCode} reason=${reason}`);
 
       if (statusCode === DisconnectReason.loggedOut) {
-        console.log("❌ Logged out. Apague a pasta 'baileys_auth' e pareie novamente.");
-        return;
+        console.log('❌ Sessão expirada, apague a pasta de sessão e tente novamente');
+      } else {
+        console.log('Reiniciando...');
+        setTimeout(connectToWhatsApp, 5000); // Tentativa de reconexão após erro
       }
-
-      reconnectAttempts += 1;
-      const waitMs = Math.min(30_000, 2_000 * reconnectAttempts);
-      console.log(`⏳ Reconnect em ${waitMs / 1000}s (tentativa ${reconnectAttempts})...`);
-      setTimeout(connectToWhatsApp, waitMs);
     }
 
-    if (connection === "open") {
+    if (connection === 'open') {
       reconnectAttempts = 0;
-      console.log("✅ CONECTADO COM SUCESSO! 🚀");
+      console.log('✅ CONECTADO COM SUCESSO! 🚀');
     }
   });
 
   // === mensagens (seu código) ===
-  sock.ev.on("messages.upsert", async (m) => {
+  sock.ev.on('messages.upsert', async (m) => {
     try {
       const msg = m.messages[0];
-      if (!msg.message || msg.key.remoteJid === "status@broadcast") return;
-
-      const texto = (msg.message.conversation || msg.message.extendedTextMessage?.text || "")
-        .toLowerCase()
-        .trim();
+      if (!msg.message || msg.key.remoteJid === 'status@broadcast') return;
+      const texto = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').toLowerCase().trim();
       if (!texto) return;
 
-      if (msg.key.fromMe && (texto.startsWith("📝") || texto.startsWith("🤖"))) return;
+      if (msg.key.fromMe && (texto.startsWith('📝') || texto.startsWith('🤖'))) return;
 
       const jid = msg.key.remoteJid;
-      const phone = jid.split("@")[0].split(":")[0];
+      const phone = jid.split('@')[0].split(':')[0];
 
-      const { data: profile } = await supabase.from("profiles").select("*").eq("phone", phone).single();
+      const { data: profile } = await supabase.from('profiles').select('*').eq('phone', phone).single();
 
-      if (!profile && !["ajuda", "oi"].includes(texto)) {
-        if (!msg.key.fromMe) await sock.sendMessage(jid, { text: "❌ Cadastre-se no site!" });
+      if (!profile && !['ajuda', 'oi'].includes(texto)) {
+        if (!msg.key.fromMe) await sock.sendMessage(jid, { text: '❌ Cadastre-se no site!' });
         return;
       }
 
-      if (["ajuda", "menu", "oi"].includes(texto))
+      if (['ajuda', 'menu', 'oi'].includes(texto)) 
         await sock.sendMessage(jid, { text: `🤖 *Bot Online*\n• Gastei 10\n• Devo 50` });
 
-      if (texto.includes("lembre")) return await agendarLembrete(sock, jid, texto, profile);
-      if (texto.includes("resumo") || texto.includes("gastei")) return await verResumo(sock, jid, profile);
-      if (texto.startsWith("devo") || texto.includes("me deve")) return await processarDivida(sock, jid, texto, profile);
+      if (texto.includes('lembre')) return await agendarLembrete(sock, jid, texto, profile);
+      if (texto.includes('resumo') || texto.includes('gastei')) return await verResumo(sock, jid, profile);
+      if (texto.startsWith('devo') || texto.includes('me deve')) return await processarDivida(sock, jid, texto, profile);
 
-      if (texto === "ver dividas") {
-        const { data: d } = await supabase.from("debts").select("*").eq("user_id", profile.id).eq("status", "pending");
+      if (texto === 'ver dividas') {
+        const { data: d } = await supabase.from('debts').select('*').eq('user_id', profile.id).eq('status', 'pending');
         const resp = d && d.length
-          ? d.map((x) => `${x.type === "owe" ? "🔴 Devo" : "🟢 Me deve"} ${x.amount} (${x.description})`).join("\n")
-          : "✅ Nada pendente.";
+          ? d.map((x) => `${x.type === 'owe' ? '🔴 Devo' : '🟢 Me deve'} ${x.amount} (${x.description})`).join('\n')
+          : '✅ Nada pendente.';
         return await sock.sendMessage(jid, { text: resp });
       }
 
-      if (texto.startsWith("!config")) {
-        const [_, sal, hrs] = texto.split(" ");
-        await supabase.from("profiles").update({ salary: parseFloat(sal), work_hours: parseFloat(hrs) }).eq("id", profile.id);
-        return await sock.sendMessage(jid, { text: "✅ Configurado!" });
+      if (texto.startsWith('!config')) {
+        const [_, sal, hrs] = texto.split(' ');
+        await supabase.from('profiles').update({ salary: parseFloat(sal), work_hours: parseFloat(hrs) }).eq('id', profile.id);
+        return await sock.sendMessage(jid, { text: '✅ Configurado!' });
       }
 
-      if (texto === "desfazer") {
+      if (texto === 'desfazer') {
         const { data: ult } = await supabase
-          .from("transactions")
-          .select("id")
-          .eq("user_id", profile.id)
-          .order("date", { ascending: false })
+          .from('transactions')
+          .select('id')
+          .eq('user_id', profile.id)
+          .order('date', { ascending: false })
           .limit(1)
           .single();
 
         if (ult) {
-          await supabase.from("transactions").delete().eq("id", ult.id);
-          return await sock.sendMessage(jid, { text: "🗑️ Desfeito!" });
+          await supabase.from('transactions').delete().eq('id', ult.id);
+          return await sock.sendMessage(jid, { text: '🗑️ Desfeito!' });
         }
       }
 
@@ -371,7 +363,7 @@ async function connectToWhatsApp() {
         await processarTransacao(sock, jid, texto, profile);
       }
     } catch (err) {
-      console.log("Erro ao processar mensagem:", err);
+      console.log('Erro ao processar mensagem:', err);
     }
   });
 }
