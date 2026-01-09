@@ -12,13 +12,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP ===
+// === CLIENTE WHATSAPP (MODO ATUALIZADO) ===
 const client = new Client({
-    // NoAuth: Para garantir leitura limpa do QR Code novo
+    // NoAuth: Essencial para a primeira conexão limpa
     authStrategy: new NoAuth(),
     
-    // Configurações para não cair a conexão
-    authTimeoutMs: 0, 
+    // Configurações de performance
+    authTimeoutMs: 60000, 
     qrMaxRetries: 10,
     
     puppeteer: {
@@ -32,16 +32,10 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--single-process', 
-            '--disable-gpu',
-            // User Agent de Windows (Essencial para leitura)
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            '--disable-gpu'
         ]
-    },
-    // 👇 Versão que o celular aceita (mantida) 👇
-    webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
+    // SEM webVersionCache: A versão do GitHub já sabe qual usar automaticamente
 });
 
 // === FUNÇÕES DO BOT ===
@@ -62,7 +56,7 @@ async function processarDivida(msg, texto, profile) { if (!(await verificarLimit
 
 client.on('qr', (qr) => {
     qrcode.generate(qr, { small: true });
-    console.log(`\nLINK QR MANUAL: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
+    console.log(`\nLink QR (Reserva): https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}\n`);
 });
 
 client.on('ready', () => console.log('✅ Bot Online!'));
@@ -74,7 +68,8 @@ client.on('message_create', async (msg) => {
     const texto = msg.body.toLowerCase().trim();
     const { data: profile } = await supabase.from('profiles').select('*').eq('phone', msg.from.replace('@c.us', '')).single();
     if (!profile && !['ajuda', 'oi'].includes(texto)) return msg.reply('❌ Cadastre-se no site!');
-
+    
+    // ... (restante dos comandos igual)
     if (texto.includes('lembre')) return await agendarLembrete(msg, texto, profile);
     if (texto.includes('resumo') || texto.includes('gastei')) return await verResumo(msg, profile);
     if (texto.startsWith('devo') || texto.includes('me deve')) return await processarDivida(msg, texto, profile);

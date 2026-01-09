@@ -1,7 +1,8 @@
 FROM node:20-bookworm-slim
 
-# Instalação do Chrome e ferramentas básicas
+# Instala Git, Chrome e ferramentas de segurança
 RUN apt-get update && apt-get install -y \
+    git \
     chromium \
     libnss3 \
     libxss1 \
@@ -11,12 +12,20 @@ RUN apt-get update && apt-get install -y \
     libgbm-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Configura o Git para usar HTTPS (resolve o erro 128 da Railway)
+RUN git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+RUN git config --global url."https://".insteadOf git://
+
 WORKDIR /app
 
 COPY package*.json ./
 
-# TRUQUE: Instala ignorando erros de dependências opcionais
-RUN npm install --no-optional --legacy-peer-deps
+# 1. Instala as dependências normais (Supabase, etc)
+RUN npm install
+
+# 2. INSTALAÇÃO FORÇADA DA VERSÃO 2026 DO WHATSAPP
+# Isso baixa o código direto do criador, pulando a versão velha do NPM
+RUN npm install github:pedroslopez/whatsapp-web.js#main --no-save
 
 COPY . .
 
