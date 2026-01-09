@@ -12,14 +12,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (MODO PERFORMANCE) ===
+// === CLIENTE WHATSAPP (A COMBINAÇÃO PERFEITA) ===
 const client = new Client({
-    // Usamos NoAuth para garantir que a conexão seja "fresca" e rápida
+    // Usamos NoAuth para testar a conexão limpa e rápida (sem salvar disco agora)
     authStrategy: new NoAuth(),
 
-    // Configurações para não deixar o celular desconectar por demora
+    // Aumentamos o tempo limite para o WhatsApp não desistir da gente
+    authTimeoutMs: 120000, // 2 minutos de paciência
     qrMaxRetries: 10,
-    authTimeoutMs: 60000, // Espera até 60s para conectar (dá tempo do celular pensar)
     
     puppeteer: {
         headless: 'new',
@@ -27,18 +27,24 @@ const client = new Client({
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            // 👇 ISSO SALVA A CONEXÃO NA RAILWAY 👇
-            '--disable-dev-shm-usage', // Evita erro de memória cheia
+            // 👇 FLAGS DE VELOCIDADE MÁXIMA (Isso evita o "Conectando..." eterno)
+            '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--single-process', // Reduz consumo de RAM
+            '--single-process', 
             '--disable-gpu',
-            // Disfarce simples e leve
+            '--disable-extensions', // Menos peso
+            '--disable-component-update', // Menos internet
+            // Disfarce de Windows (O que chegou mais longe)
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
+    },
+    // 👇 VOLTAMOS COM A VERSÃO QUE DEU SINAL DE VIDA 👇
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
-    // ⚠️ REMOVI O 'webVersionCache'. Deixar automático evita conflito com seu celular novo.
 });
 
 // === FUNÇÕES ===
