@@ -1,4 +1,4 @@
-const { Client, LocalAuth, NoAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { createClient } = require('@supabase/supabase-js');
 const schedule = require('node-schedule'); 
@@ -12,14 +12,20 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (ESTABILIDADE WINDOWS) ===
+// === CLIENTE WHATSAPP (MODO TURBO + PACIÊNCIA) ===
 const client = new Client({
-    // Mudamos o ID para 'sessao-windows-v1' para ele criar uma pasta nova e limpa
+    // 1. Mudei o nome para limpar a sujeira da tentativa anterior
     authStrategy: new LocalAuth({ 
-        clientId: 'sessao-windows-v1',
+        clientId: 'sessao-turbo-final',
         dataPath: '/app/.wwebjs_auth'
     }),
+
+    // 2. ISSO É VITAL: Diz pro bot esperar o tempo que for preciso para baixar suas conversas
+    authTimeoutMs: 0, 
     
+    // 3. Se der conflito, ele força a entrada
+    takeoverOnConflict: true,
+
     puppeteer: {
         headless: 'new',
         executablePath: '/usr/bin/chromium',
@@ -31,11 +37,11 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            // 👇 A MUDANÇA: Disfarce de Windows 10 (Mais confiável que Mac)
+            // Disfarce de Windows 10
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 VERSÃO LTS: A 2.2412.54 é a "rocha" da estabilidade para conectar
+    // Mantendo a versão que funcionou (2.2412.54)
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
