@@ -12,15 +12,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === CLIENTE WHATSAPP (CORREÇÃO UNIVERSAL) ===
+// === CLIENTE WHATSAPP ===
 const client = new Client({
-    // NoAuth: Essencial agora para limpar o erro "Não foi possível conectar"
     authStrategy: new NoAuth(),
-
-    // Aumenta a tolerância para internet oscilando
     authTimeoutMs: 120000, 
     qrMaxRetries: 10,
-    
     puppeteer: {
         headless: 'new',
         executablePath: '/usr/bin/chromium',
@@ -32,19 +28,18 @@ const client = new Client({
             '--no-first-run',
             '--no-zygote',
             '--disable-gpu',
-            '--disable-features=IsolateOrigins,site-per-process', // Ajuda a não travar no carregamento
-            // User Agent de Windows (Padrão Ouro)
+            '--disable-features=IsolateOrigins,site-per-process', 
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
         ]
     },
-    // 👇 A MUDANÇA CRUCIAL: Versão 2.2403.2 (Mais estável para bibliotecas antigas)
     webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2403.2.html',
     }
 });
 
-// === FUNÇÕES (MANTIDAS) ===
+// === FUNÇÕES ===
+
 function escolherEmoji(texto, tipo) {
     if (tipo === 'income') return '🤑'; 
     if (texto.includes('cerveja') || texto.includes('chopp') || texto.includes('bar')) return '🍺';
@@ -142,13 +137,25 @@ client.on('qr', (qr) => {
 client.on('ready', () => console.log('✅ Bot Online!'));
 
 client.on('message_create', async (msg) => {
-    if (msg.fromMe || msg.from.includes('@g.us')) return;
+    // 1. Ignora mensagens de Grupos
+    if (msg.from.includes('@g.us')) return;
+
+    // 2. PROTEÇÃO ANTI-LOOP: Ignora mensagens que o próprio Bot enviou
+    // Se a mensagem for minha (fromMe) E começar com os emojis que o bot usa, ele ignora.
+    if (msg.fromMe && (msg.body.startsWith('📝') || msg.body.startsWith('📊') || msg.body.startsWith('🤖') || msg.body.startsWith('✅') || msg.body.startsWith('🔒') || msg.body.startsWith('⚠️') || msg.body.startsWith('📉') || msg.body.startsWith('📈'))) {
+        return;
+    }
+
+    // Se passou daqui, é você escrevendo um comando (ex: "Gastei 10")
+    
     const texto = msg.body.toLowerCase().trim();
     const { data: profile } = await supabase.from('profiles').select('*').eq('phone', msg.from.replace('@c.us', '')).single();
     if (!profile && !['ajuda', 'oi'].includes(texto)) return msg.reply('❌ Cadastre-se no site!');
 
     if (texto.includes('lembre')) return await agendarLembrete(msg, texto, profile);
-    if (texto.includes('quanto gastei') || texto.includes('resumo')) return await verResumo(msg, profile);
+    // IMPORTANTE: Mudei para 'ver resumo' para evitar confundir com a resposta do bot que contém a palavra 'resumo'
+    if (texto === 'resumo' || texto === 'ver resumo' || texto.includes('quanto gastei')) return await verResumo(msg, profile);
+    
     if (texto.startsWith('devo') || texto.includes('me deve')) return await processarDivida(msg, texto, profile);
     if (texto === 'ver dividas') {
         const { data: d } = await supabase.from('debts').select('*').eq('user_id', profile.id).eq('status', 'pending');
