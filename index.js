@@ -1,10 +1,8 @@
 const http = require("http");
-
 const {
   makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
 } = require("@whiskeysockets/baileys");
 
@@ -218,7 +216,7 @@ function startHttpServer() {
       return res.end(`
         <html>
           <body style="font-family: Arial; padding: 24px; text-align:center">
-            <h2>Escaneie no WhatsApp (Aparelhos conectados)</h2>
+            <h2>Escaneie no WhatsApp</h2>
             <p>Abra no PC/Notebook e escaneie com o celular.</p>
             <img src="${img}" style="width: 420px; max-width: 90vw; image-rendering: pixelated" />
             <p style="margin-top:16px"><a href="/qr">Recarregar</a></p>
@@ -237,34 +235,24 @@ function startHttpServer() {
 }
 
 // === CONEXÃO BAILEYS ===
-let reconnectAttempts = 0;
-
 async function connectToWhatsApp() {
-  const logger = pino({ level: 'info' });
+  // ⚠️ MUDEI O NOME DA PASTA PARA 'baileys_auth_fixed' PARA FORÇAR UMA SESSÃO LIMPA
+  const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_fixed');
 
-  // Não alterar a pasta para não perder a sessão
-  const { state, saveCreds } = await useMultiFileAuthState('baileys_auth');
-
-  console.log('🔄 Buscando versão mais recente do WhatsApp Web...');
-  const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(`✅ Usando a versão do WhatsApp: ${version.join('.')}`);
+  console.log('🔄 Iniciando conexão Baileys (Versão Padrão)...');
 
   const sock = makeWASocket({
-    version,
-    logger,
-    browser: ["Chrome (Linux)", "Chrome", "120.0.0"],
-
+    // REMOVI A VERSÃO MANUAL: Deixei o Baileys decidir a melhor
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
-
-    printQRInTerminal: true, // Exibe o QR no terminal com maior qualidade
-    markOnlineOnConnect: false,
-    syncFullHistory: false,
-    connectTimeoutMs: 60_000, // Timeout maior para conexão
-    defaultQueryTimeoutMs: 60_000,
-    keepAliveIntervalMs: 25_000,
+    // ⚠️ ASSINATURA QUE FUNCIONA: Ubuntu é o padrão aceito hoje em dia
+    browser: ["Ubuntu", "Chrome", "20.0.04"], 
+    logger: pino({ level: 'info' }), 
+    printQRInTerminal: true,
+    connectTimeoutMs: 60000, 
+    syncFullHistory: false, // Acelera o carregamento
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -273,37 +261,34 @@ async function connectToWhatsApp() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      reconnectAttempts = 0;
       lastQrString = qr;
-
       console.log("\n=============================================================");
-      console.log("✅ QR CODE GERADO — ESCANEIE PELO CELULAR (Aparelhos conectados)");
-      qrcode.generate(qr, { small: false }); // Exibe o QR com mais qualidade
+      console.log("✅ QR CODE GERADO — ESCANEIE AGORA!");
+      qrcode.generate(qr, { small: true });
       const qrLink = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&ecc=H&data=${encodeURIComponent(qr)}`;
-      console.log(`Se preferir, abra o QR com esse link: ${qrLink}`);
+      console.log(`Link Backup: ${qrLink}`);
       console.log("=============================================================\n");
     }
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const reason = lastDisconnect?.error?.output?.payload?.message || lastDisconnect?.error?.message;
-      console.log(`🚨 Conexão fechada. statusCode=${statusCode} reason=${reason}`);
+      // const reason = lastDisconnect?.error?.output?.payload?.message;
+      console.log(`🚨 Conexão caiu. Status: ${statusCode}`);
 
       if (statusCode === DisconnectReason.loggedOut) {
-        console.log('❌ Sessão expirada, apague a pasta de sessão e tente novamente');
+        console.log('❌ Logout. Delete a pasta de sessão e reinicie.');
       } else {
-        console.log('Reiniciando...');
-        setTimeout(connectToWhatsApp, 5000); // Tentativa de reconexão após erro
+        console.log('🔄 Reconectando em 5 segundos...');
+        setTimeout(connectToWhatsApp, 5000);
       }
     }
 
     if (connection === 'open') {
-      reconnectAttempts = 0;
       console.log('✅ CONECTADO COM SUCESSO! 🚀');
     }
   });
 
-  // === mensagens (seu código) ===
+  // === mensagens ===
   sock.ev.on('messages.upsert', async (m) => {
     try {
       const msg = m.messages[0];
