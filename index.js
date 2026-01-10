@@ -8,8 +8,8 @@ const SUPABASE_URL = 'https://gukvjlhgvgoaqbgiuveq.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || ''; 
 const LINK_DO_SITE = 'https://ultima-chance-app.vercel.app';
 
-// 👇 SEU NÚMERO (Confira se está certo)
-const MEU_NUMERO_TELEFONE = '5511999999999'; 
+// 👇 CORRIGIDO: SEU NÚMERO EXATO
+const MEU_NUMERO_TELEFONE = '5521992544208'; 
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -18,12 +18,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 // === FUNÇÕES (MANTIDAS) ===
 function escolherEmoji(texto, tipo) { if (tipo === 'income') return '🤑'; if (texto.includes('cerveja') || texto.includes('chopp')) return '🍺'; return '💸'; }
 function calcularTempoDeVida(valor, salario, horasMensais) { if (!salario || !horasMensais) return null; const valorPorHora = salario / horasMensais; const horasGastas = valor / valorPorHora; return horasGastas < 1 ? `${Math.round(horasGastas * 60)} min` : `${horasGastas.toFixed(1)} hrs`; }
+
 async function verificarLimite(sock, jid, profile) {
     if (profile.is_pro) return true;
     const { count: qtdGastos } = await supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
     const { count: qtdDividas } = await supabase.from('debts').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
     if ((qtdGastos || 0) + (qtdDividas || 0) >= 5) { await sock.sendMessage(jid, { text: `🔒 *LIMITE ATINGIDO!*\n🚀 Assine: ${LINK_DO_SITE}` }); return false; } return true; 
 }
+
 async function agendarLembrete(sock, jid, texto, profile) {
     const matchDia = texto.match(/dia\s+(\d+)/); if (!matchDia) return sock.sendMessage(jid, { text: '⚠️ Ex: "Lembre de pagar a luz dia 25"' }); const dia = parseInt(matchDia[1]); const mensagem = texto.replace('lembre', '').replace('me lembre', '').replace(/dia\s+\d+/, '').trim(); let data = new Date(); data.setDate(dia); data.setHours(9, 0, 0, 0); if (data < new Date()) data.setMonth(data.getMonth() + 1); await supabase.from('reminders').insert({ user_id: profile.id, message: mensagem, remind_at: data.toISOString(), status: 'pending' }); schedule.scheduleJob(data, function(){ const destino = profile.phone.includes('@') ? profile.phone : `${profile.phone}@s.whatsapp.net`; sock.sendMessage(destino, { text: `⏰ *LEMBRETE!* \n📌 ${mensagem}` }); }); await sock.sendMessage(jid, { text: `✅ *Agendado!* Dia ${dia} às 09:00.` });
 }
@@ -31,10 +33,10 @@ async function verResumo(sock, jid, profile) { const dias = new Date(); dias.set
 async function processarTransacao(sock, jid, texto, profile) { if (!(await verificarLimite(sock, jid, profile))) return; let tipo = texto.match(/^(recebi|ganhei|caiu|salario)/) ? 'income' : 'expense'; const itens = texto.split(/\s+e\s+|,\s+/); let txt = `📝 *Relatório*\n`, total = 0, achou = false; for (let item of itens) { const match = item.match(/(\d+[.,]?\d*)/); if (match) { let valor = parseFloat(match[0].replace(',', '.')); let desc = item.replace(match[0], '').replace(/(gastei|comprei|paguei|recebi|no|na|em|de)\s+/g, '').trim() || (tipo === 'income' ? 'Entrada' : 'Geral'); desc = desc.charAt(0).toUpperCase() + desc.slice(1); await supabase.from('transactions').insert({ user_id: profile.id, amount: valor, type: tipo, description: desc, date: new Date().toISOString() }); total += valor; achou = true; txt += `${escolherEmoji(desc.toLowerCase(), tipo)} *${desc}:* R$ ${valor.toFixed(2)}\n`; } } if (!achou) return sock.sendMessage(jid, { text: '🤖 Ex: "Gastei 10 pizza"' }); if (tipo === 'expense' && profile.salary) txt += `⏳ Custo Vida: ${calcularTempoDeVida(total, profile.salary, profile.work_hours)}`; await sock.sendMessage(jid, { text: txt }); }
 async function processarDivida(sock, jid, texto, profile) { if (!(await verificarLimite(sock, jid, profile))) return; if (texto.startsWith('devo')) { const valorMatch = texto.match(/(\d+[.,]?\d*)/); if(!valorMatch) return; const valor = parseFloat(valorMatch[0].replace(',', '.')); const quem = texto.replace(/devo|\d+|para|pro|pra/g, '').trim(); await supabase.from('debts').insert({ user_id: profile.id, amount: valor, description: quem, type: 'owe', status: 'pending' }); await sock.sendMessage(jid, { text: `📉 Devo ${valor} para ${quem}.` }); } else if (texto.includes('me deve')) { const valorMatch = texto.match(/(\d+[.,]?\d*)/); if(!valorMatch) return; const valor = parseFloat(valorMatch[0].replace(',', '.')); const quem = texto.split('me deve')[0].trim(); await supabase.from('debts').insert({ user_id: profile.id, amount: valor, description: quem, type: 'receive', status: 'pending' }); await sock.sendMessage(jid, { text: `📈 ${quem} te deve ${valor}.` }); } }
 
-// === CONEXÃO VIA PAREAMENTO (SEM QR CODE) ===
+// === CONEXÃO VIA PAREAMENTO ===
 async function connectToWhatsApp() {
-    // ⚠️ NOVA PASTA PARA LIMPAR QUALQUER ERRO
-    const { state, saveCreds } = await useMultiFileAuthState('sessao_windows_final');
+    // ⚠️ Pasta nova para tentar limpar erros
+    const { state, saveCreds } = await useMultiFileAuthState('sessao_final_corrigida');
     
     // Versão Fixa e Estável
     const version = [2, 3000, 1015901307];
@@ -43,24 +45,23 @@ async function connectToWhatsApp() {
         version,
         auth: {
             creds: state.creds,
-            // Cache de chaves ajuda na estabilidade
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        // ⚠️ DISFARCE DE WINDOWS (O Segredo)
+        // Camuflagem de Windows
         browser: ["Windows", "Chrome", "10.0.0"], 
         connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: 60000,
-        retryRequestDelayMs: 5000, // Espera mais se der erro
+        retryRequestDelayMs: 5000,
         syncFullHistory: false
     });
 
-    // 🚀 LÓGICA DO CÓDIGO DE PAREAMENTO
+    // 🚀 GERA O CÓDIGO AUTOMATICAMENTE PARA O SEU NÚMERO
     if (!sock.authState.creds.me && !sock.authState.creds.registered) {
         setTimeout(async () => {
             try {
-                // Gera o código
+                console.log('🔄 Solicitando código para:', MEU_NUMERO_TELEFONE);
                 const code = await sock.requestPairingCode(MEU_NUMERO_TELEFONE);
                 console.log('\n\n=============================================================');
                 console.log('📱 CÓDIGO DE PAREAMENTO (MODO WINDOWS):');
@@ -68,7 +69,7 @@ async function connectToWhatsApp() {
                 console.log('👉 No celular: WhatsApp > Aparelhos Conectados > Conectar com número');
                 console.log('=============================================================\n\n');
             } catch (err) {
-                console.log('Erro ao gerar código (Tente reiniciar):', err);
+                console.log('Erro ao gerar código:', err);
             }
         }, 6000);
     }
@@ -92,7 +93,7 @@ async function connectToWhatsApp() {
         }
     });
 
-    // Lógica de mensagens mantida...
+    // Lógica de mensagens
     sock.ev.on('messages.upsert', async m => {
         try {
             const msg = m.messages[0];
