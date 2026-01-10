@@ -15,25 +15,30 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 // === FUNÇÕES DO BOT ===
 function escolherEmoji(texto, tipo) { if (tipo === 'income') return '🤑'; if (texto.includes('cerveja') || texto.includes('chopp')) return '🍺'; return '💸'; }
 function calcularTempoDeVida(valor, salario, horasMensais) { if (!salario || !horasMensais) return null; const valorPorHora = salario / horasMensais; const horasGastas = valor / valorPorHora; return horasGastas < 1 ? `${Math.round(horasGastas * 60)} min` : `${horasGastas.toFixed(1)} hrs`; }
+
 async function verificarLimite(sock, jid, profile) {
     if (profile.is_pro) return true;
     const { count: qtdGastos } = await supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
     const { count: qtdDividas } = await supabase.from('debts').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
     if ((qtdGastos || 0) + (qtdDividas || 0) >= 5) { await sock.sendMessage(jid, { text: `🔒 *LIMITE ATINGIDO!*\n🚀 Assine: ${LINK_DO_SITE}` }); return false; } return true; 
 }
+
 async function agendarLembrete(sock, jid, texto, profile) {
     const matchDia = texto.match(/dia\s+(\d+)/); if (!matchDia) return sock.sendMessage(jid, { text: '⚠️ Ex: "Lembre de pagar a luz dia 25"' }); const dia = parseInt(matchDia[1]); const mensagem = texto.replace('lembre', '').replace('me lembre', '').replace(/dia\s+\d+/, '').trim(); let data = new Date(); data.setDate(dia); data.setHours(9, 0, 0, 0); if (data < new Date()) data.setMonth(data.getMonth() + 1); await supabase.from('reminders').insert({ user_id: profile.id, message: mensagem, remind_at: data.toISOString(), status: 'pending' }); schedule.scheduleJob(data, function(){ const destino = profile.phone.includes('@') ? profile.phone : `${profile.phone}@s.whatsapp.net`; sock.sendMessage(destino, { text: `⏰ *LEMBRETE!* \n📌 ${mensagem}` }); }); await sock.sendMessage(jid, { text: `✅ *Agendado!* Dia ${dia} às 09:00.` });
 }
+
 async function verResumo(sock, jid, profile) { const dias = new Date(); dias.setDate(new Date().getDate() - 7); const { data: trans } = await supabase.from('transactions').select('*').eq('user_id', profile.id).eq('type', 'expense').gte('date', dias.toISOString()); if (!trans || !trans.length) return sock.sendMessage(jid, { text: '🤷‍♂️ Nada nos últimos 7 dias.' }); let total = 0, txt = `📊 *Resumo (7 Dias)*\n`; trans.forEach(t => { total += t.amount; txt += `💸 ${t.description.substring(0,15)}.. R$ ${t.amount}\n`; }); await sock.sendMessage(jid, { text: txt + `🚨 *Total:* R$ ${total.toFixed(2)}` }); }
+
 async function processarTransacao(sock, jid, texto, profile) { if (!(await verificarLimite(sock, jid, profile))) return; let tipo = texto.match(/^(recebi|ganhei|caiu|salario)/) ? 'income' : 'expense'; const itens = texto.split(/\s+e\s+|,\s+/); let txt = `📝 *Relatório*\n`, total = 0, achou = false; for (let item of itens) { const match = item.match(/(\d+[.,]?\d*)/); if (match) { let valor = parseFloat(match[0].replace(',', '.')); let desc = item.replace(match[0], '').replace(/(gastei|comprei|paguei|recebi|no|na|em|de)\s+/g, '').trim() || (tipo === 'income' ? 'Entrada' : 'Geral'); desc = desc.charAt(0).toUpperCase() + desc.slice(1); await supabase.from('transactions').insert({ user_id: profile.id, amount: valor, type: tipo, description: desc, date: new Date().toISOString() }); total += valor; achou = true; txt += `${escolherEmoji(desc.toLowerCase(), tipo)} *${desc}:* R$ ${valor.toFixed(2)}\n`; } } if (!achou) return sock.sendMessage(jid, { text: '🤖 Ex: "Gastei 10 pizza"' }); if (tipo === 'expense' && profile.salary) txt += `⏳ Custo Vida: ${calcularTempoDeVida(total, profile.salary, profile.work_hours)}`; await sock.sendMessage(jid, { text: txt }); }
+
 async function processarDivida(sock, jid, texto, profile) { if (!(await verificarLimite(sock, jid, profile))) return; if (texto.startsWith('devo')) { const valorMatch = texto.match(/(\d+[.,]?\d*)/); if(!valorMatch) return; const valor = parseFloat(valorMatch[0].replace(',', '.')); const quem = texto.replace(/devo|\d+|para|pro|pra/g, '').trim(); await supabase.from('debts').insert({ user_id: profile.id, amount: valor, description: quem, type: 'owe', status: 'pending' }); await sock.sendMessage(jid, { text: `📉 Devo ${valor} para ${quem}.` }); } else if (texto.includes('me deve')) { const valorMatch = texto.match(/(\d+[.,]?\d*)/); if(!valorMatch) return; const valor = parseFloat(valorMatch[0].replace(',', '.')); const quem = texto.split('me deve')[0].trim(); await supabase.from('debts').insert({ user_id: profile.id, amount: valor, description: quem, type: 'receive', status: 'pending' }); await sock.sendMessage(jid, { text: `📈 ${quem} te deve ${valor}.` }); } }
 
 // === CONEXÃO FINAL ===
 async function connectToWhatsApp() {
-    // 👇 ESTA LINHA GARANTE QUE ELE VAI LER A PASTA QUE VOCÊ COLOU
+    // 👇 USA A PASTA QUE VOCÊ SUBIU DO PC
     const { state, saveCreds } = await useMultiFileAuthState('sessao_local_windows');
     
-    console.log('🔄 Iniciando bot com sessão recuperada do PC...');
+    console.log('🔄 Iniciando bot com sessão recuperada...');
 
     const sock = makeWASocket({
         auth: {
@@ -42,8 +47,7 @@ async function connectToWhatsApp() {
         },
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        // Mantém a identidade de Windows para não levantar suspeitas
-        browser: ["Windows", "Chrome", "10.0.0"], 
+        // ⚠️ REMOVI A LINHA "browser" PARA USAR O PADRÃO E EVITAR O ERRO 405
         connectTimeoutMs: 60000,
         syncFullHistory: false
     });
