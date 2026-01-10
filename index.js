@@ -1,4 +1,4 @@
-const { makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { createClient } = require('@supabase/supabase-js');
 const schedule = require('node-schedule');
 const pino = require('pino');
@@ -35,19 +35,23 @@ async function processarDivida(sock, jid, texto, profile) { if (!(await verifica
 
 // === CONEXÃO FINAL ===
 async function connectToWhatsApp() {
-    // 👇 USA A PASTA QUE VOCÊ SUBIU DO PC
+    // 👇 Mantemos a pasta que você subiu
     const { state, saveCreds } = await useMultiFileAuthState('sessao_local_windows');
     
-    console.log('🔄 Iniciando bot com sessão recuperada...');
+    // 👇 Buscamos a versão mais nova na hora (Automático)
+    const { version } = await fetchLatestBaileysVersion();
+    console.log(`🔄 Versão Baileys: ${version.join('.')}`);
 
     const sock = makeWASocket({
+        version, // Usa a versão automática
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        // ⚠️ REMOVI A LINHA "browser" PARA USAR O PADRÃO E EVITAR O ERRO 405
+        // 👇 Assinatura padrão de Linux (Ideal para o Render)
+        browser: ["Ubuntu", "Chrome", "20.0.04"],
         connectTimeoutMs: 60000,
         syncFullHistory: false
     });
@@ -63,14 +67,14 @@ async function connectToWhatsApp() {
             if (reason !== DisconnectReason.loggedOut) {
                 connectToWhatsApp();
             } else {
-                console.log('❌ Sessão inválida. Precisa gerar novamente no PC.');
+                console.log('❌ Sessão inválida ou expirada.');
             }
         } else if(connection === 'open') {
             console.log('✅ BOT ONLINE E RODANDO! 🚀');
         }
     });
 
-    // Listener de Mensagens
+    // ... (Listeners de mensagem iguais)
     sock.ev.on('messages.upsert', async m => {
         try {
             const msg = m.messages[0];
