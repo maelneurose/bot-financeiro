@@ -1,4 +1,4 @@
-const { makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, delay } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const { createClient } = require('@supabase/supabase-js');
 const schedule = require('node-schedule');
 const pino = require('pino');
@@ -8,24 +8,19 @@ const SUPABASE_URL = 'https://gukvjlhgvgoaqbgiuveq.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY || ''; 
 const LINK_DO_SITE = 'https://ultima-chance-app.vercel.app';
 
-// 👇 CORRIGIDO: SEU NÚMERO EXATO
-const MEU_NUMERO_TELEFONE = '5521992544208'; 
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-// === FUNÇÕES (MANTIDAS) ===
+// === FUNÇÕES DO BOT ===
 function escolherEmoji(texto, tipo) { if (tipo === 'income') return '🤑'; if (texto.includes('cerveja') || texto.includes('chopp')) return '🍺'; return '💸'; }
 function calcularTempoDeVida(valor, salario, horasMensais) { if (!salario || !horasMensais) return null; const valorPorHora = salario / horasMensais; const horasGastas = valor / valorPorHora; return horasGastas < 1 ? `${Math.round(horasGastas * 60)} min` : `${horasGastas.toFixed(1)} hrs`; }
-
 async function verificarLimite(sock, jid, profile) {
     if (profile.is_pro) return true;
     const { count: qtdGastos } = await supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
     const { count: qtdDividas } = await supabase.from('debts').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
     if ((qtdGastos || 0) + (qtdDividas || 0) >= 5) { await sock.sendMessage(jid, { text: `🔒 *LIMITE ATINGIDO!*\n🚀 Assine: ${LINK_DO_SITE}` }); return false; } return true; 
 }
-
 async function agendarLembrete(sock, jid, texto, profile) {
     const matchDia = texto.match(/dia\s+(\d+)/); if (!matchDia) return sock.sendMessage(jid, { text: '⚠️ Ex: "Lembre de pagar a luz dia 25"' }); const dia = parseInt(matchDia[1]); const mensagem = texto.replace('lembre', '').replace('me lembre', '').replace(/dia\s+\d+/, '').trim(); let data = new Date(); data.setDate(dia); data.setHours(9, 0, 0, 0); if (data < new Date()) data.setMonth(data.getMonth() + 1); await supabase.from('reminders').insert({ user_id: profile.id, message: mensagem, remind_at: data.toISOString(), status: 'pending' }); schedule.scheduleJob(data, function(){ const destino = profile.phone.includes('@') ? profile.phone : `${profile.phone}@s.whatsapp.net`; sock.sendMessage(destino, { text: `⏰ *LEMBRETE!* \n📌 ${mensagem}` }); }); await sock.sendMessage(jid, { text: `✅ *Agendado!* Dia ${dia} às 09:00.` });
 }
@@ -33,46 +28,25 @@ async function verResumo(sock, jid, profile) { const dias = new Date(); dias.set
 async function processarTransacao(sock, jid, texto, profile) { if (!(await verificarLimite(sock, jid, profile))) return; let tipo = texto.match(/^(recebi|ganhei|caiu|salario)/) ? 'income' : 'expense'; const itens = texto.split(/\s+e\s+|,\s+/); let txt = `📝 *Relatório*\n`, total = 0, achou = false; for (let item of itens) { const match = item.match(/(\d+[.,]?\d*)/); if (match) { let valor = parseFloat(match[0].replace(',', '.')); let desc = item.replace(match[0], '').replace(/(gastei|comprei|paguei|recebi|no|na|em|de)\s+/g, '').trim() || (tipo === 'income' ? 'Entrada' : 'Geral'); desc = desc.charAt(0).toUpperCase() + desc.slice(1); await supabase.from('transactions').insert({ user_id: profile.id, amount: valor, type: tipo, description: desc, date: new Date().toISOString() }); total += valor; achou = true; txt += `${escolherEmoji(desc.toLowerCase(), tipo)} *${desc}:* R$ ${valor.toFixed(2)}\n`; } } if (!achou) return sock.sendMessage(jid, { text: '🤖 Ex: "Gastei 10 pizza"' }); if (tipo === 'expense' && profile.salary) txt += `⏳ Custo Vida: ${calcularTempoDeVida(total, profile.salary, profile.work_hours)}`; await sock.sendMessage(jid, { text: txt }); }
 async function processarDivida(sock, jid, texto, profile) { if (!(await verificarLimite(sock, jid, profile))) return; if (texto.startsWith('devo')) { const valorMatch = texto.match(/(\d+[.,]?\d*)/); if(!valorMatch) return; const valor = parseFloat(valorMatch[0].replace(',', '.')); const quem = texto.replace(/devo|\d+|para|pro|pra/g, '').trim(); await supabase.from('debts').insert({ user_id: profile.id, amount: valor, description: quem, type: 'owe', status: 'pending' }); await sock.sendMessage(jid, { text: `📉 Devo ${valor} para ${quem}.` }); } else if (texto.includes('me deve')) { const valorMatch = texto.match(/(\d+[.,]?\d*)/); if(!valorMatch) return; const valor = parseFloat(valorMatch[0].replace(',', '.')); const quem = texto.split('me deve')[0].trim(); await supabase.from('debts').insert({ user_id: profile.id, amount: valor, description: quem, type: 'receive', status: 'pending' }); await sock.sendMessage(jid, { text: `📈 ${quem} te deve ${valor}.` }); } }
 
-// === CONEXÃO VIA PAREAMENTO ===
+// === CONEXÃO FINAL ===
 async function connectToWhatsApp() {
-    // ⚠️ Pasta nova para tentar limpar erros
-    const { state, saveCreds } = await useMultiFileAuthState('sessao_final_corrigida');
+    // 👇 ESTA LINHA GARANTE QUE ELE VAI LER A PASTA QUE VOCÊ COLOU
+    const { state, saveCreds } = await useMultiFileAuthState('sessao_local_windows');
     
-    // Versão Fixa e Estável
-    const version = [2, 3000, 1015901307];
+    console.log('🔄 Iniciando bot com sessão recuperada do PC...');
 
     const sock = makeWASocket({
-        version,
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        // Camuflagem de Windows
+        // Mantém a identidade de Windows para não levantar suspeitas
         browser: ["Windows", "Chrome", "10.0.0"], 
         connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 60000,
-        retryRequestDelayMs: 5000,
         syncFullHistory: false
     });
-
-    // 🚀 GERA O CÓDIGO AUTOMATICAMENTE PARA O SEU NÚMERO
-    if (!sock.authState.creds.me && !sock.authState.creds.registered) {
-        setTimeout(async () => {
-            try {
-                console.log('🔄 Solicitando código para:', MEU_NUMERO_TELEFONE);
-                const code = await sock.requestPairingCode(MEU_NUMERO_TELEFONE);
-                console.log('\n\n=============================================================');
-                console.log('📱 CÓDIGO DE PAREAMENTO (MODO WINDOWS):');
-                console.log(`\n   ${code?.match(/.{1,4}/g)?.join('-') || code}   \n`);
-                console.log('👉 No celular: WhatsApp > Aparelhos Conectados > Conectar com número');
-                console.log('=============================================================\n\n');
-            } catch (err) {
-                console.log('Erro ao gerar código:', err);
-            }
-        }, 6000);
-    }
 
     sock.ev.on('creds.update', saveCreds);
 
@@ -82,18 +56,17 @@ async function connectToWhatsApp() {
         if(connection === 'close') {
             const reason = (lastDisconnect?.error)?.output?.statusCode;
             console.log(`🚨 Conexão caiu (${reason}). Reconectando...`);
-            
             if (reason !== DisconnectReason.loggedOut) {
                 connectToWhatsApp();
             } else {
-                console.log('❌ Logged out. Apague a pasta de sessão.');
+                console.log('❌ Sessão inválida. Precisa gerar novamente no PC.');
             }
         } else if(connection === 'open') {
-            console.log('✅ BOT CONECTADO COM SUCESSO! 🚀');
+            console.log('✅ BOT ONLINE E RODANDO! 🚀');
         }
     });
 
-    // Lógica de mensagens
+    // Listener de Mensagens
     sock.ev.on('messages.upsert', async m => {
         try {
             const msg = m.messages[0];
